@@ -6,6 +6,7 @@
 
 - 새 작업을 시작할 때는 무조건 `main`에서 브랜치를 새로 따서 작업합니다. `main`에서 바로 커밋하지 않습니다.
 - `main`에는 절대 푸시하지 않습니다. `git push origin main`, `git push --force` 등 `main`을 바꾸는 푸시는 사용자가 요청해도 하지 않고, 작업 브랜치를 푸시한 뒤 PR로 합칩니다.
+- 위 두 규칙은 `.claude/hooks/guard-main.sh` 훅(`.claude/settings.json`)이 막습니다. 훅에 막히면 우회하지 말고 브랜치를 새로 땁니다.
 - 브랜치 이름은 커밋 접두사를 따릅니다: `feat/…`, `fix/…`, `docs/…`, `refactor/…`, `chore/…` (예: `feat/model-integration`).
 - 시작하기 전에 `main`을 최신으로 맞춥니다.
 
