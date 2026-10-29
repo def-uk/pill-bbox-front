@@ -1,0 +1,5 @@
+[
+  {"yolo_idx": 0, "category_id": 9001, "name": "샘플약 A (흰색 원형)"},
+  {"yolo_idx": 1, "category_id": 9002, "name": "샘플약 B (노란색 타원형)"},
+  {"yolo_idx": 2, "category_id": 9003, "name": "샘플약 C (분홍색 원형)"}
+]

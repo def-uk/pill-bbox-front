@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/detection.dart';
+import '../../utils/intake_matcher.dart';
+import '../common/medication_picker.dart';
 import '../common/theme.dart';
 import 'result_view_model.dart';
 
@@ -21,6 +23,24 @@ class ResultScreen extends StatelessWidget {
       } else if (vm.errorMessage != null) {
         messenger.showSnackBar(SnackBar(content: Text(vm.errorMessage!)));
       }
+    }
+
+    Future<void> changeMedication(ResultLine line) async {
+      final medication = await showMedicationPicker(
+        context,
+        title: '${line.name}을(를) 어떤 약으로 바꿀까요?',
+        medications: vm.medications,
+      );
+      if (medication != null) vm.changeMedication(line, medication);
+    }
+
+    Future<void> addMedication() async {
+      final medication = await showMedicationPicker(
+        context,
+        title: '추가할 약',
+        medications: vm.medications,
+      );
+      if (medication != null) vm.addMedication(medication);
     }
 
     return Scaffold(
@@ -48,29 +68,49 @@ class ResultScreen extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
-            if (vm.pills.isEmpty)
-              const ListTile(title: Text('알약을 찾지 못했습니다. 다시 찍어 주세요.')),
-            for (final (i, pill) in vm.pills.indexed)
+            if (vm.lines.isEmpty)
+              const ListTile(title: Text('알약을 찾지 못했습니다. 다시 찍거나 약을 추가해 주세요.')),
+            for (final line in vm.lines)
               ListTile(
-                title: Text(pill.name),
-                subtitle: pill.needsReview
-                    ? const Text('확인 필요', style: TextStyle(color: reviewColor))
-                    : null,
+                title: Text(line.name),
+                subtitle: _LineStatus(line: line),
+                onTap: () => changeMedication(line),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      tooltip: '${pill.name} 하나 빼기',
-                      onPressed: pill.count > 0 ? () => vm.decrement(i) : null,
+                      tooltip: '${line.name} 하나 빼기',
+                      onPressed: line.count > 0
+                          ? () => vm.decrement(line)
+                          : null,
                       icon: const Icon(Icons.remove_circle_outline),
                     ),
-                    Text('${pill.count}정'),
+                    Text('${line.count}정'),
                     IconButton(
-                      tooltip: '${pill.name} 하나 더하기',
-                      onPressed: () => vm.increment(i),
+                      tooltip: '${line.name} 하나 더하기',
+                      onPressed: () => vm.increment(line),
                       icon: const Icon(Icons.add_circle_outline),
                     ),
                   ],
+                ),
+              ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: TextButton.icon(
+                  onPressed: addMedication,
+                  icon: const Icon(Icons.add),
+                  label: const Text('약 추가'),
+                ),
+              ),
+            ),
+            if (vm.hasUnregistered)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  '등록하지 않은 약은 저장되지 않습니다. 눌러서 등록한 약으로 바꿔 주세요.',
+                  style: TextStyle(color: reviewColor),
                 ),
               ),
           ],
@@ -99,6 +139,49 @@ class ResultScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 예정과 비교한 결과. 예: "예정대로", "예정 2정 중 1정"
+class _LineStatus extends StatelessWidget {
+  const _LineStatus({required this.line});
+
+  final ResultLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    final outline = Theme.of(context).colorScheme.outline;
+    final (text, color) = switch (line) {
+      ResultLine(isRegistered: false) => ('등록하지 않은 약 · 눌러서 바꾸기', reviewColor),
+      ResultLine(status: MatchStatus.ok) => (
+        '✓ 예정대로',
+        Theme.of(context).colorScheme.primary,
+      ),
+      ResultLine(status: MatchStatus.missing) => (
+        '예정 ${line.expected}정 중 ${line.count}정',
+        reviewColor,
+      ),
+      ResultLine(status: MatchStatus.extra) => (
+        '예정 ${line.expected}정보다 많음',
+        reviewColor,
+      ),
+      ResultLine(status: MatchStatus.unscheduled) => ('지금 예정에 없는 약', outline),
+    };
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: text,
+            style: TextStyle(color: color),
+          ),
+          if (line.needsReview)
+            const TextSpan(
+              text: ' · 확인 필요',
+              style: TextStyle(color: reviewColor),
+            ),
+        ],
       ),
     );
   }

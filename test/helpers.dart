@@ -44,7 +44,11 @@ Future<void> pumpUntilFound(WidgetTester tester, Finder finder) async {
       () => Future<void>.delayed(const Duration(milliseconds: 10)),
     );
     await tester.pump(const Duration(milliseconds: 10));
-    if (finder.evaluate().isNotEmpty) return;
+    if (finder.evaluate().isNotEmpty) {
+      // 화면 전환·시트 애니메이션이 끝난 뒤에 누르도록 기다린다.
+      await tester.pump(const Duration(milliseconds: 500));
+      return;
+    }
   }
   final texts = tester
       .widgetList<Text>(find.byType(Text))

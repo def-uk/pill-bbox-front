@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -9,6 +10,7 @@ import 'data/services/database_service.dart';
 import 'data/services/fake_pill_detector.dart';
 import 'data/services/photo_storage_service.dart';
 import 'data/services/pill_detector.dart';
+import 'data/services/pill_label_service.dart';
 import 'ui/common/theme.dart';
 import 'ui/router.dart';
 
@@ -21,6 +23,7 @@ void main() {
       camera: CameraService(),
       // TODO(개발 순서 3): YoloPillDetector로 바꾼다.
       detector: FakePillDetector(),
+      labels: PillLabelService(),
     ),
   );
 }
@@ -32,12 +35,14 @@ class PillboxApp extends StatefulWidget {
     required this.photos,
     required this.camera,
     required this.detector,
+    required this.labels,
   });
 
   final DatabaseService database;
   final PhotoStorageService photos;
   final CameraService camera;
   final PillDetector detector;
+  final PillLabelService labels;
 
   @override
   State<PillboxApp> createState() => _PillboxAppState();
@@ -56,9 +61,13 @@ class _PillboxAppState extends State<PillboxApp> {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        Provider.value(value: widget.photos),
         Provider.value(value: widget.camera),
         Provider.value(value: widget.detector),
-        Provider(create: (_) => MedicationRepository(widget.database)),
+        Provider.value(value: widget.labels),
+        ChangeNotifierProvider(
+          create: (_) => MedicationRepository(widget.database, widget.photos),
+        ),
         ChangeNotifierProvider(
           create: (_) => IntakeRepository(widget.database, widget.photos),
         ),
@@ -66,6 +75,9 @@ class _PillboxAppState extends State<PillboxApp> {
       child: MaterialApp.router(
         title: 'pillbbox',
         theme: appTheme,
+        locale: const Locale('ko'),
+        supportedLocales: const [Locale('ko')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
         routerConfig: _router,
       ),
     );
