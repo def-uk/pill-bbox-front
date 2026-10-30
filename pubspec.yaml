@@ -1,0 +1,31 @@
+name: pillbbox
+description: "알약 사진 한 장으로 복용 기록을 남기는 앱"
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  camera: ^0.12.2
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  go_router: ^18.1.1
+  path: ^1.9.1
+  path_provider: ^2.1.6
+  provider: ^6.1.5+1
+  sqflite: ^2.4.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  sqflite_common_ffi: ^2.4.5
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/labels/
