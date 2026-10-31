@@ -17,6 +17,7 @@ dependencies:
   path_provider: ^2.1.6
   provider: ^6.1.5+1
   sqflite: ^2.4.5
+  ultralytics_yolo: ^0.7.1
 
 dev_dependencies:
   flutter_test:
@@ -29,3 +30,4 @@ flutter:
   assets:
     - assets/images/
     - assets/labels/
+    - assets/models/

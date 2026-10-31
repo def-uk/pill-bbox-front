@@ -9,8 +9,7 @@ class PillLabelService {
   PillLabelService({this.asset = sampleLabelsAsset, AssetBundle? bundle})
     : _bundle = bundle ?? rootBundle;
 
-  /// FakePillDetector와 짝을 이루는 샘플 목록.
-  // TODO(개발 순서 3): 모델과 함께 받는 assets/models/labels.json으로 바꾼다.
+  /// 모델을 받지 않았을 때 FakePillDetector와 짝을 이루는 샘플 목록.
   static const sampleLabelsAsset = 'assets/labels/sample_labels.json';
 
   final String asset;
