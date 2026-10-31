@@ -1,4 +1,4 @@
-package com.pillbbox.pillbbox
+package io.github.defuk.pillbbox
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -45,3 +45,11 @@ app.*.map.json
 # 모델 파일은 GitHub Release에서 받는다 (docs/DESIGN.md 3.3). 쓰는 태그만 VERSION에 남긴다.
 /assets/models/*
 !/assets/models/VERSION
+
+# fastlane (docs/DESIGN.md 6장). 키(.p8, JSON, keystore)는 Git에 올리지 않는다.
+**/fastlane/report.xml
+**/fastlane/README.md
+**/fastlane/test_output
+*.p8
+*.ipa
+*.aab

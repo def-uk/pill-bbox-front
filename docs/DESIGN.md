@@ -223,58 +223,58 @@ assets/models/                # pillbox-<태그>.tflite / .mlpackage.zip / .labe
 
 ### 6.3 Fastfile
 
-Flutter 문서대로 `android/`와 `ios/`에 fastlane을 따로 둡니다.
+Flutter 문서대로 `android/`와 `ios/`에 fastlane을 따로 두고, 각각 `beta` lane 하나만 둡니다.
 
-`android/fastlane/Fastfile`
+| 파일 | 하는 일 |
+|---|---|
+| `android/fastlane/Fastfile` | `app-release.aab`를 Play Console 내부 테스트 트랙에 올림 |
+| `ios/fastlane/Fastfile` | `flutter build ipa`가 만든 아카이브를 App Store Connect API 키로 서명·내보낸 뒤 TestFlight에 올림 |
 
-```ruby
-default_platform(:android)
-
-platform :android do
-  desc "Play Console 내부 테스트 트랙에 올린다"
-  lane :beta do
-    upload_to_play_store(
-      track: "internal",
-      aab: "../build/app/outputs/bundle/release/app-release.aab",
-      json_key: ENV["PLAY_JSON_KEY_PATH"],
-    )
-  end
-end
-```
-
-`ios/fastlane/Fastfile`
-
-```ruby
-default_platform(:ios)
-
-platform :ios do
-  desc "TestFlight에 올린다"
-  lane :beta do
-    api_key = app_store_connect_api_key(
-      key_id: ENV["ASC_KEY_ID"],
-      issuer_id: ENV["ASC_ISSUER_ID"],
-      key_filepath: ENV["ASC_KEY_PATH"],
-    )
-    upload_to_testflight(
-      api_key: api_key,
-      ipa: Dir["../build/ios/ipa/*.ipa"].first,
-      skip_waiting_for_build_processing: true,
-    )
-  end
-end
-```
-
-iOS 서명은 Xcode 자동 서명으로 시작합니다. 여러 사람이 각자 Mac에서 서명해야 할 때만 `match`를 더합니다.
+iOS는 Xcode에 Apple ID로 로그인하지 않고 API 키로 클라우드 서명합니다. 배포 인증서와 프로비저닝 프로파일은 Xcode가 만듭니다. 그래서 API 키는 **Admin** 역할(또는 클라우드 관리 배포 인증서 권한)이어야 합니다.
 
 ### 6.4 배포 명령
 
 | 상황 | 명령 |
 |---|---|
-| Android 테스트 배포 | `flutter build appbundle --build-number=<N>` → `cd android && bundle exec fastlane beta` |
-| iOS 테스트 배포 | `flutter build ipa --build-number=<N>` → `cd ios && bundle exec fastlane beta` |
+| Android 테스트 배포 | `fvm flutter build appbundle --build-number=<N>` → `cd android && bundle exec fastlane beta` |
+| iOS 테스트 배포 | `fvm flutter build ipa --build-number=<N>` → `cd ios && bundle exec fastlane beta` |
 
-- 버전 이름은 `pubspec.yaml`의 `version`, 빌드 번호는 배포할 때마다 1씩 올립니다.
-- 모델을 바꾼 빌드는 릴리스 노트에 모델 태그(`assets/models/VERSION`)를 적습니다.
+- 버전 이름은 `pubspec.yaml`의 `version`, 빌드 번호는 배포할 때마다 1씩 올립니다. Android와 iOS에 같은 번호를 씁니다.
+- 모델을 바꾼 빌드는 릴리스 노트에 모델 태그(`assets/models/VERSION`)를 적습니다. 빌드에는 그때 `assets/models/`에 받아 둔 모델이 들어갑니다.
+- 키 경로는 환경 변수로 넘깁니다: `PLAY_JSON_KEY_PATH`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_PATH`.
+
+### 6.5 처음 한 번 할 일
+
+앱 ID는 두 스토어 모두 `io.github.defuk.pillbbox`입니다. Play에 한 번 올리면 바꿀 수 없습니다.
+
+**Android**
+
+1. 업로드 키를 만들고 안전한 곳(저장소 밖)에 백업합니다. 잃어버리면 Play Console에서 키 재설정을 요청해야 합니다.
+
+   ```bash
+   keytool -genkey -v -keystore ~/keys/pillbbox-upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+   ```
+
+2. `android/key.properties`를 만듭니다(Git 제외).
+
+   ```properties
+   storeFile=/Users/<사용자>/keys/pillbbox-upload.jks
+   storePassword=<키스토어 비밀번호>
+   keyAlias=upload
+   keyPassword=<키 비밀번호>
+   ```
+
+3. Play Console에서 앱을 만들고, **첫 번들은 Console에서 직접** 내부 테스트 트랙에 올립니다. Play API는 한 번도 번들을 받지 않은 앱에 올리지 못합니다. Play 앱 서명은 기본값(Google이 관리)을 씁니다.
+4. 내부 테스트 트랙에 테스터 이메일 목록을 넣고, 참여 링크를 테스터에게 보냅니다.
+5. Google Cloud에서 서비스 계정 JSON 키를 만들고, Play Console 사용자 및 권한에서 그 계정에 이 앱의 출시 권한을 줍니다. 경로를 `PLAY_JSON_KEY_PATH`로 넘깁니다.
+6. 앱을 아직 출시하지 않았으면(Console에서 첫 출시 전) `PLAY_RELEASE_STATUS=draft`로 올리고 Console에서 출시합니다.
+
+**iOS**
+
+1. App Store Connect > 사용자 및 액세스 > 통합 > App Store Connect API에서 Admin 역할의 팀 키를 만듭니다. `.p8`은 한 번만 받을 수 있으니 저장소 밖에 보관하고, 키 ID·발급자 ID와 함께 `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_PATH`로 넘깁니다.
+2. Certificates, Identifiers & Profiles > Identifiers에서 번들 ID `io.github.defuk.pillbbox`를 등록합니다.
+3. App Store Connect > 나의 앱에서 그 번들 ID로 새 앱을 만듭니다.
+4. 업로드한 빌드가 처리되면(보통 10~30분) TestFlight > 내부 테스트 그룹에 테스터를 넣습니다. 내부 테스터(팀 멤버)는 심사 없이 바로 설치합니다.
 
 ## 7. 개발 순서
 
