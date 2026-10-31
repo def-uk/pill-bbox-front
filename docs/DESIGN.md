@@ -46,15 +46,17 @@
 
 간단하게 만드는 것이 목표이고 약 사진은 민감 정보이므로 **기기 안 추론**으로 합니다. 서버를 두지 않으니 백엔드 개발·운영이 통째로 빠집니다.
 
-구현은 Ultralytics 공식 Flutter 플러그인 [`ultralytics_yolo`](https://pub.dev/packages/ultralytics_yolo)를 씁니다. Android는 TFLite, iOS는 CoreML 모델을 읽습니다.
+구현은 Ultralytics 공식 Flutter 플러그인 [`ultralytics_yolo`](https://pub.dev/packages/ultralytics_yolo)를 씁니다. Android는 TFLite, iOS는 Core ML 모델을 읽습니다.
+
+> `ultralytics_yolo`와 Ultralytics 모델은 AGPL-3.0입니다. 스토어에 배포하기 전에 소스 공개로 갈지 Ultralytics Enterprise License를 받을지 정해야 합니다(8장).
 
 ### 3.3 모델 전달 절차
 
 ```text
 pill-bbox (모델 저장소)                       pillbbox-front (이 저장소)
-best.pt ─ export ─▶ pillbox.tflite  ─┐
-                    pillbox.mlpackage ┼─ GitHub Release ─▶ scripts/fetch_model.sh ─▶ assets/models/
-class_map.csv ─ 변환 ─▶ labels.json   ─┘
+best.pt ─ export ─▶ pillbox.tflite        ─┐
+                    pillbox.mlpackage.zip ┼─ GitHub Release ─▶ scripts/fetch_model.sh ─▶ assets/models/
+class_map.csv ─ 변환 ─▶ labels.json         ─┘
 ```
 
 1. 모델 저장소에서 확정한 `best.pt`를 export합니다.
@@ -63,11 +65,12 @@ class_map.csv ─ 변환 ─▶ labels.json   ─┘
    from ultralytics import YOLO
 
    model = YOLO("best.pt")
-   model.export(format="tflite", imgsz=640)            # Android
-   model.export(format="coreml", imgsz=640, nms=True)  # iOS
+   model.export(format="litert", nms=None, imgsz=640)    # Android → pillbox.tflite
+   model.export(format="coreml", nms=False, imgsz=640)   # iOS → .mlpackage를 zip으로 묶어 pillbox.mlpackage.zip
    ```
 
-   정확한 인자(nms, half/int8 양자화)는 export 시점의 `ultralytics_yolo` README를 따릅니다. 플러그인이 YOLO26을 지원하는지도 이때 확인합니다.
+   인자는 `ultralytics_yolo` 0.7.1 문서(공식 YOLO26 모델과 같은 설정, `ultralytics>=8.4.142`)를 따릅니다. iOS는 Flutter 에셋에서 `.mlpackage.zip`만 읽으므로 zip으로 묶습니다.
+   **모델의 클래스 이름(`names`)은 `labels.json`의 `name`과 같거나 `category_id` 숫자여야 합니다.** 플러그인 0.7.1은 iOS에서 클래스 번호를 주지 않아, 앱이 이름으로 약을 찾습니다(`toDetections`).
 2. `class_map.csv`를 앱이 읽을 `labels.json`으로 바꿉니다.
 
    ```json
@@ -75,7 +78,10 @@ class_map.csv ─ 변환 ─▶ labels.json   ─┘
    ```
 
 3. 세 파일을 모델 저장소의 GitHub Release(`model-v1` 같은 태그)에 올립니다.
-4. 이 저장소에서 `scripts/fetch_model.sh <태그>`로 받아 `assets/models/`에 둡니다. 모델 파일은 크기가 커서 Git에 올리지 않고, 쓰는 태그만 `assets/models/VERSION`에 적어 커밋합니다.
+4. 이 저장소에서 `scripts/fetch_model.sh <태그>`로 받아 `assets/models/`에 둡니다. 모델 파일은 크기가 커서 Git에 올리지 않고, 쓰는 태그만 `assets/models/VERSION`에 적어 커밋합니다. 태그 없이 실행하면 `VERSION`의 태그를 받습니다.
+   - 파일은 `pillbox-<태그>.tflite`처럼 태그를 넣은 이름으로 둡니다. 플러그인이 모델을 기기에 파일 이름으로 캐시하므로, 이름이 같으면 앱을 업데이트해도 예전 모델이 계속 쓰입니다.
+   - 모델을 받지 않았으면 앱은 `FakePillDetector`로 돕니다.
+   - 모델 확정 전에는 `standin-yolo26n`(공식 YOLO26n, COCO 80종)으로 플러그인 연동을 확인합니다. 약이 아니라 사람·버스 같은 물체를 찾습니다.
 
 ### 3.4 앱 쪽 인터페이스
 
@@ -168,7 +174,7 @@ lib/
 │   ├── medication/
 │   └── common/               # 공통 위젯, 테마
 └── utils/                    # intake_matcher.dart
-assets/models/                # pillbox.tflite, pillbox.mlpackage, labels.json (Git 제외), VERSION
+assets/models/                # pillbox-<태그>.tflite / .mlpackage.zip / .labels.json (Git 제외), VERSION
 ```
 
 ### 5.2 데이터
@@ -290,3 +296,4 @@ iOS 서명은 Xcode 자동 서명으로 시작합니다. 여러 사람이 각자
 | 최종 모델과 크기 | 모델 팀 결정. 기기 속도를 위해 s/n 크기 export도 함께 받아 비교 | 모델 팀 |
 | 알림을 MVP에 넣을지 | 2차 | 팀 |
 | 직접 등록한 약(56종 밖) 허용 | 허용하되 촬영 인식은 안 됨, 수동 기록만 | 팀 |
+| 탐지 플러그인 라이선스 | `ultralytics_yolo`와 모델이 AGPL-3.0. 배포 전 소스 공개 또는 Enterprise License | 팀 |

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -8,22 +9,30 @@ import 'data/repositories/medication_repository.dart';
 import 'data/services/camera_service.dart';
 import 'data/services/database_service.dart';
 import 'data/services/fake_pill_detector.dart';
+import 'data/services/model_bundle.dart';
 import 'data/services/photo_storage_service.dart';
 import 'data/services/pill_detector.dart';
 import 'data/services/pill_label_service.dart';
+import 'data/services/yolo_pill_detector.dart';
 import 'ui/common/theme.dart';
 import 'ui/router.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // 모델을 받지 않았으면(scripts/fetch_model.sh) 고정된 결과를 돌려주는 가짜 탐지기를 쓴다.
+  final model = await ModelBundle.find(rootBundle);
+  final labels = model == null
+      ? PillLabelService()
+      : PillLabelService(asset: model.labelsAsset);
   runApp(
     PillboxApp(
       database: DatabaseService(),
       photos: PhotoStorageService(),
       camera: CameraService(),
-      // TODO(개발 순서 3): YoloPillDetector로 바꾼다.
-      detector: FakePillDetector(),
-      labels: PillLabelService(),
+      detector: model == null
+          ? FakePillDetector()
+          : YoloPillDetector(modelAsset: model.modelAsset, labels: labels),
+      labels: labels,
     ),
   );
 }

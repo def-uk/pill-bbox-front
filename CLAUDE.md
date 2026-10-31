@@ -36,4 +36,4 @@ MVVM입니다 (View, ViewModel, Repository, Service).
 - `lib/data/models/` 모델, `lib/data/repositories/` 저장소, `lib/data/services/` 탐지·카메라·DB(sqflite) 등 서비스
 - `lib/utils/` 공용 함수
 
-지금은 탐지 모델 대신 `FakePillDetector`가 고정된 결과를 돌려줍니다.
+탐지 모델은 `scripts/fetch_model.sh`로 `assets/models/`에 받습니다(Git 제외). 받으면 `YoloPillDetector`(`ultralytics_yolo`), 받지 않으면 `FakePillDetector`가 쓰입니다. 지금 버전은 연동 확인용 `standin-yolo26n`(COCO 80종)입니다.
