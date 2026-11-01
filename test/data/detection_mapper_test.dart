@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pillbbox/data/models/pill_label.dart';
-import 'package:pillbbox/data/services/yolo_pill_detector.dart';
+import 'package:pillbbox/data/services/detection_mapper.dart';
 
 const labels = [
   PillLabel(yoloIdx: 0, categoryId: 1899, name: '보령부스파정 5mg'),

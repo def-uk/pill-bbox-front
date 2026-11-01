@@ -13,7 +13,8 @@ import 'data/services/model_bundle.dart';
 import 'data/services/photo_storage_service.dart';
 import 'data/services/pill_detector.dart';
 import 'data/services/pill_label_service.dart';
-import 'data/services/yolo_pill_detector.dart';
+import 'data/services/platform_services.dart'
+    if (dart.library.js_interop) 'data/services/platform_services_web.dart';
 import 'ui/common/theme.dart';
 import 'ui/router.dart';
 
@@ -26,12 +27,12 @@ Future<void> main() async {
       : PillLabelService(asset: model.labelsAsset);
   runApp(
     PillboxApp(
-      database: DatabaseService(),
-      photos: PhotoStorageService(),
+      database: DatabaseService(factory: platformDatabaseFactory),
+      photos: createPhotoStorage(),
       camera: CameraService(),
       detector: model == null
           ? FakePillDetector()
-          : YoloPillDetector(modelAsset: model.modelAsset, labels: labels),
+          : createModelDetector(model, labels),
       labels: labels,
     ),
   );
@@ -82,7 +83,7 @@ class _PillboxAppState extends State<PillboxApp> {
         ),
       ],
       child: MaterialApp.router(
-        title: 'pillbbox',
+        title: 'Pillbbox',
         theme: appTheme,
         locale: const Locale('ko'),
         supportedLocales: const [Locale('ko')],

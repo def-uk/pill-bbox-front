@@ -38,20 +38,24 @@ void main() {
       ...labels,
       'assets/models/pillbox-model-v1.tflite': '',
       'assets/models/pillbox-model-v1.mlpackage.zip': '',
+      'assets/models/pillbox-model-v1.onnx': '',
     });
 
-    final android = await ModelBundle.find(bundle, ios: false);
+    final android = await ModelBundle.find(bundle, extension: 'tflite');
     expect(android?.version, 'model-v1');
     expect(android?.modelAsset, 'assets/models/pillbox-model-v1.tflite');
     expect(android?.labelsAsset, 'assets/models/pillbox-model-v1.labels.json');
 
-    final ios = await ModelBundle.find(bundle, ios: true);
+    final ios = await ModelBundle.find(bundle, extension: 'mlpackage.zip');
     expect(ios?.modelAsset, 'assets/models/pillbox-model-v1.mlpackage.zip');
+
+    final web = await ModelBundle.find(bundle, extension: 'onnx');
+    expect(web?.modelAsset, 'assets/models/pillbox-model-v1.onnx');
   });
 
   test('모델을 받지 않았거나 다른 버전이면 null', () async {
     expect(
-      await ModelBundle.find(FakeAssetBundle(version), ios: false),
+      await ModelBundle.find(FakeAssetBundle(version), extension: 'tflite'),
       isNull,
     );
     expect(
@@ -61,10 +65,10 @@ void main() {
           ...labels,
           'assets/models/pillbox-model-v0.tflite': '',
         }),
-        ios: false,
+        extension: 'tflite',
       ),
       isNull,
     );
-    expect(await ModelBundle.find(FakeAssetBundle({}), ios: false), isNull);
+    expect(await ModelBundle.find(FakeAssetBundle({}), extension: 'tflite'), isNull);
   });
 }

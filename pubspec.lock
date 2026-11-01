@@ -37,10 +37,10 @@ packages:
     dependency: transitive
     description:
       name: camera_android_camerax
-      sha256: faf885ca8140f22df8dc05d1839afc702d0329dd9b0b2f0bc6f9b05f3f20e10c
+      sha256: b5e0a2a8e63f2788139379926a9abc3a64eed5e309c1384e5db25b74f15b7307
       url: "https://pub.dev"
     source: hosted
-    version: "0.7.6"
+    version: "0.7.6+1"
   camera_avfoundation:
     dependency: transitive
     description:
@@ -129,6 +129,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.8.0"
+  dev_build:
+    dependency: transitive
+    description:
+      name: dev_build
+      sha256: aa1cf737b416bdedfeaf416f99ec9a58a1816a313862f59eba22de28b9e55bd3
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.16"
   fake_async:
     dependency: transitive
     description:
@@ -209,10 +217,10 @@ packages:
     dependency: "direct main"
     description:
       name: go_router
-      sha256: "07089be6dc124eb9596a51b5e359c657f30a59929287f11b126c2cd13eaaece0"
+      sha256: f1c2d3c2b0b2096b435d7af033dd4e586fa31f51d988c5985e64495cd926d872
       url: "https://pub.dev"
     source: hosted
-    version: "18.1.1"
+    version: "18.1.2"
   hooks:
     dependency: transitive
     description:
@@ -469,6 +477,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.8"
+  pool:
+    dependency: transitive
+    description:
+      name: pool
+      sha256: "4177f68c237ea2128d1bee66ac17b2ce05ba3dbaafcbdd54c5d40a39d0b6b11c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.5.3"
+  process_run:
+    dependency: transitive
+    description:
+      name: process_run
+      sha256: "4818d891c15347d84abb67319f18ed605cd5710e50a2fe82822e8f3b6b9295d2"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.4.1"
   provider:
     dependency: "direct main"
     description:
@@ -594,6 +618,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.4.5"
+  sqflite_common_ffi_web:
+    dependency: "direct main"
+    description:
+      name: sqflite_common_ffi_web
+      sha256: "8e9cc4bb519ff421985f719a652930eb6eee77a19a33612f589314984dab9312"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.0"
   sqflite_darwin:
     dependency: transitive
     description:

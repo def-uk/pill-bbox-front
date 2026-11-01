@@ -17,7 +17,7 @@ DatabaseService createTestDatabase() {
 }
 
 /// 파일 대신 메모리에 사진을 둔다.
-class FakePhotoStorageService extends PhotoStorageService {
+class FakePhotoStorageService implements PhotoStorageService {
   final photos = <String, Uint8List>{};
 
   @override
@@ -26,6 +26,9 @@ class FakePhotoStorageService extends PhotoStorageService {
     photos[path] = bytes;
     return path;
   }
+
+  @override
+  Future<Uint8List?> load(String relativePath) async => photos[relativePath];
 
   @override
   Future<void> delete(String relativePath) async => photos.remove(relativePath);
