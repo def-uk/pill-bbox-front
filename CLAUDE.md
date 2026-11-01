@@ -24,9 +24,12 @@ Flutter 버전은 fvm으로 고정합니다(`.fvmrc`). `flutter` 대신 `fvm flu
 
 ```bash
 fvm flutter run
+fvm flutter run -d chrome   # 웹. 처음 한 번 fvm dart run sqflite_common_ffi_web:setup
 fvm flutter test
 fvm flutter analyze
 ```
+
+웹을 먼저 배포합니다. `main`에 합치면 GitHub Actions가 GitHub Pages에 올립니다(`docs/DESIGN.md` 6장).
 
 ## 구조
 
@@ -36,4 +39,4 @@ MVVM입니다 (View, ViewModel, Repository, Service).
 - `lib/data/models/` 모델, `lib/data/repositories/` 저장소, `lib/data/services/` 탐지·카메라·DB(sqflite) 등 서비스
 - `lib/utils/` 공용 함수
 
-탐지 모델은 `scripts/fetch_model.sh`로 `assets/models/`에 받습니다(Git 제외). 받으면 `YoloPillDetector`(`ultralytics_yolo`), 받지 않으면 `FakePillDetector`가 쓰입니다. 지금 버전은 연동 확인용 `standin-yolo26n`(COCO 80종)입니다.
+탐지 모델은 `scripts/fetch_model.sh`로 `assets/models/`에 받습니다(Git 제외). 받으면 앱은 `YoloPillDetector`(`ultralytics_yolo`), 웹은 `OnnxPillDetector`(`web/pill_detector.js`, onnxruntime-web), 받지 않으면 `FakePillDetector`가 쓰입니다. 플랫폼별 서비스는 `platform_services.dart` / `platform_services_web.dart`에서 조건부 import로 고릅니다. 지금 버전은 연동 확인용 `standin-yolo26n`(COCO 80종)입니다.

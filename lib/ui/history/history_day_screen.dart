@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -75,20 +73,22 @@ class _Thumbnail extends StatelessWidget {
     final placeholder = SizedBox.square(
       dimension: size,
       child: Icon(
-        entry.photoFile == null ? Icons.edit : Icons.broken_image_outlined,
+        entry.record.photoPath == null
+            ? Icons.edit
+            : Icons.broken_image_outlined,
       ),
     );
-    final file = entry.photoFile;
-    if (file == null) return placeholder;
+    final photo = entry.photo;
+    if (photo == null) return placeholder;
     return GestureDetector(
       onTap: () => showDialog<void>(
         context: context,
-        builder: (context) => Dialog(child: Image.file(File(file))),
+        builder: (context) => Dialog(child: Image.memory(photo)),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: Image.file(
-          File(file),
+        child: Image.memory(
+          photo,
           width: size,
           height: size,
           fit: BoxFit.cover,

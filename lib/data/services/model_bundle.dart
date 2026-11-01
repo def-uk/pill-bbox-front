@@ -1,5 +1,4 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// 앱에 넣은 탐지 모델 파일들. scripts/fetch_model.sh가 assets/models/에 받아 둔다.
@@ -17,21 +16,31 @@ class ModelBundle {
 
   final String version;
 
-  /// Android는 TFLite, iOS는 Core ML(.mlpackage.zip).
+  /// Android는 TFLite, iOS는 Core ML(.mlpackage.zip), 웹은 ONNX.
   final String modelAsset;
   final String labelsAsset;
 
+  /// 지금 플랫폼이 읽는 모델 파일의 확장자.
+  static String get platformExtension => kIsWeb
+      ? 'onnx'
+      : defaultTargetPlatform == TargetPlatform.iOS
+      ? 'mlpackage.zip'
+      : 'tflite';
+
   /// 지금 플랫폼에 맞는 모델 파일이 앱에 있으면 돌려준다. 받지 않았으면 null.
-  static Future<ModelBundle?> find(AssetBundle bundle, {bool? ios}) async {
+  static Future<ModelBundle?> find(
+    AssetBundle bundle, {
+    String? extension,
+  }) async {
     final assets = (await AssetManifest.loadFromAssetBundle(
       bundle,
     )).listAssets().toSet();
     if (!assets.contains(versionAsset)) return null;
     final version = (await bundle.loadString(versionAsset)).trim();
-    final extension = (ios ?? Platform.isIOS) ? 'mlpackage.zip' : 'tflite';
     final candidate = ModelBundle(
       version: version,
-      modelAsset: 'assets/models/pillbox-$version.$extension',
+      modelAsset:
+          'assets/models/pillbox-$version.${extension ?? platformExtension}',
       labelsAsset: 'assets/models/pillbox-$version.labels.json',
     );
     return assets.contains(candidate.modelAsset) &&

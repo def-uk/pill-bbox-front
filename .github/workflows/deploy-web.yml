@@ -1,0 +1,73 @@
+# 웹 빌드를 GitHub Pages에 올린다 (docs/DESIGN.md 6장). PR에서는 빌드만 확인한다.
+name: 웹 배포
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Flutter 버전 읽기 (.fvmrc)
+        id: fvm
+        run: echo "flutter=$(jq -r .flutter .fvmrc)" >> "$GITHUB_OUTPUT"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ steps.fvm.outputs.flutter }}
+          channel: stable
+          cache: true
+
+      - name: 모델 캐시
+        id: model-cache
+        uses: actions/cache@v4
+        with:
+          path: assets/models/pillbox-*
+          key: model-${{ hashFiles('assets/models/VERSION', 'scripts/fetch_model.sh') }}
+
+      - uses: astral-sh/setup-uv@v6
+        if: steps.model-cache.outputs.cache-hit != 'true'
+
+      - name: 모델 받기
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        run: scripts/fetch_model.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # ONNX 내보내기에 쓰는 PyTorch는 CPU 버전이면 된다 (CUDA 버전은 몇 GB).
+          UV_INDEX: https://download.pytorch.org/whl/cpu
+          UV_INDEX_STRATEGY: unsafe-best-match
+
+      - run: flutter pub get
+      - run: dart run sqflite_common_ffi_web:setup
+      - run: flutter build web --release --base-href "/${{ github.event.repository.name }}/"
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: build/web
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -9,14 +9,14 @@ class HistoryEntry {
   const HistoryEntry({
     required this.record,
     required this.name,
-    required this.photoFile,
+    required this.photo,
   });
 
   final IntakeRecord record;
   final String name;
 
-  /// 사진 파일의 절대 경로. 직접 기록이면 null.
-  final String? photoFile;
+  /// 복용 사진. 직접 기록이거나 사진을 읽지 못했으면 null.
+  final Uint8List? photo;
 }
 
 /// 하루의 복용 기록.
@@ -48,9 +48,7 @@ class HistoryDayViewModel extends ChangeNotifier {
         HistoryEntry(
           record: r,
           name: names[r.medicationId] ?? '알 수 없는 약',
-          photoFile: r.photoPath == null
-              ? null
-              : await _photos.resolve(r.photoPath!),
+          photo: r.photoPath == null ? null : await _photos.load(r.photoPath!),
         ),
     ];
     if (_disposed) return;

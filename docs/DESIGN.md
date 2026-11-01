@@ -20,7 +20,9 @@
 | MVP | 오늘 복용 현황(예정 vs 복용), 날짜별 기록 조회 |
 | 2차 | 복용 시간 알림(로컬 알림) |
 | 2차 | 갤러리 사진으로 기록 |
-| 하지 않음 | 회원가입·로그인, 서버 저장·기기 간 동기화, 처방전 OCR, 웹 버전 |
+| 하지 않음 | 회원가입·로그인, 서버 저장·기기 간 동기화, 처방전 OCR |
+
+같은 Flutter 코드로 웹과 앱(Android, iOS)을 만듭니다. 스토어 심사·서명 없이 링크로 바로 열 수 있도록 **웹을 먼저 배포**하고(6장), 앱 배포는 뒤로 미룹니다.
 
 ## 3. 모델 연동
 
@@ -46,16 +48,22 @@
 
 간단하게 만드는 것이 목표이고 약 사진은 민감 정보이므로 **기기 안 추론**으로 합니다. 서버를 두지 않으니 백엔드 개발·운영이 통째로 빠집니다.
 
-구현은 Ultralytics 공식 Flutter 플러그인 [`ultralytics_yolo`](https://pub.dev/packages/ultralytics_yolo)를 씁니다. Android는 TFLite, iOS는 Core ML 모델을 읽습니다.
+| 플랫폼 | 구현 | 모델 파일 |
+|---|---|---|
+| Android, iOS | Ultralytics 공식 Flutter 플러그인 [`ultralytics_yolo`](https://pub.dev/packages/ultralytics_yolo) | Android TFLite, iOS Core ML |
+| 웹 | 브라우저에서 [onnxruntime-web](https://onnxruntime.ai/docs/tutorials/web/)(`web/pill_detector.js`). `ultralytics_yolo`는 웹을 지원하지 않음 | ONNX |
 
-> `ultralytics_yolo`와 Ultralytics 모델은 AGPL-3.0입니다. 스토어에 배포하기 전에 소스 공개로 갈지 Ultralytics Enterprise License를 받을지 정해야 합니다(8장).
+웹도 사진을 서버로 보내지 않고 브라우저 안에서 추론합니다.
+
+> `ultralytics_yolo`와 Ultralytics 모델은 AGPL-3.0입니다. 웹에 공개하거나 스토어에 배포하기 전에 소스 공개로 갈지 Ultralytics Enterprise License를 받을지 정해야 합니다(8장).
 
 ### 3.3 모델 전달 절차
 
 ```text
 pill-bbox (모델 저장소)                       pillbbox-front (이 저장소)
 best.pt ─ export ─▶ pillbox.tflite        ─┐
-                    pillbox.mlpackage.zip ┼─ GitHub Release ─▶ scripts/fetch_model.sh ─▶ assets/models/
+                    pillbox.mlpackage.zip ┤
+                    pillbox.onnx          ┼─ GitHub Release ─▶ scripts/fetch_model.sh ─▶ assets/models/
 class_map.csv ─ 변환 ─▶ labels.json         ─┘
 ```
 
@@ -67,9 +75,11 @@ class_map.csv ─ 변환 ─▶ labels.json         ─┘
    model = YOLO("best.pt")
    model.export(format="litert", nms=None, imgsz=640)    # Android → pillbox.tflite
    model.export(format="coreml", nms=False, imgsz=640)   # iOS → .mlpackage를 zip으로 묶어 pillbox.mlpackage.zip
+   model.export(format="onnx", imgsz=640)                # 웹 → pillbox.onnx
    ```
 
    인자는 `ultralytics_yolo` 0.7.1 문서(공식 YOLO26 모델과 같은 설정, `ultralytics>=8.4.142`)를 따릅니다. iOS는 Flutter 에셋에서 `.mlpackage.zip`만 읽으므로 zip으로 묶습니다.
+   웹은 ONNX 출력이 NMS 전(`[1, 4+클래스 수, 8400]`)이든 YOLO26 end2end(`[1, 300, 6]`)든 읽습니다. 입력은 640 고정입니다.
    **모델의 클래스 이름(`names`)은 `labels.json`의 `name`과 같거나 `category_id` 숫자여야 합니다.** 플러그인 0.7.1은 iOS에서 클래스 번호를 주지 않아, 앱이 이름으로 약을 찾습니다(`toDetections`).
 2. `class_map.csv`를 앱이 읽을 `labels.json`으로 바꿉니다.
 
@@ -77,11 +87,11 @@ class_map.csv ─ 변환 ─▶ labels.json         ─┘
    [{"yolo_idx": 0, "category_id": <원본 category_id>, "name": "<dl_name>"}]
    ```
 
-3. 세 파일을 모델 저장소의 GitHub Release(`model-v1` 같은 태그)에 올립니다.
+3. 네 파일을 모델 저장소의 GitHub Release(`model-v1` 같은 태그)에 올립니다.
 4. 이 저장소에서 `scripts/fetch_model.sh <태그>`로 받아 `assets/models/`에 둡니다. 모델 파일은 크기가 커서 Git에 올리지 않고, 쓰는 태그만 `assets/models/VERSION`에 적어 커밋합니다. 태그 없이 실행하면 `VERSION`의 태그를 받습니다.
    - 파일은 `pillbox-<태그>.tflite`처럼 태그를 넣은 이름으로 둡니다. 플러그인이 모델을 기기에 파일 이름으로 캐시하므로, 이름이 같으면 앱을 업데이트해도 예전 모델이 계속 쓰입니다.
    - 모델을 받지 않았으면 앱은 `FakePillDetector`로 돕니다.
-   - 모델 확정 전에는 `standin-yolo26n`(공식 YOLO26n, COCO 80종)으로 플러그인 연동을 확인합니다. 약이 아니라 사람·버스 같은 물체를 찾습니다.
+   - 모델 확정 전에는 `standin-yolo26n`(공식 YOLO26n, COCO 80종)으로 연동을 확인합니다. 약이 아니라 사람·버스 같은 물체를 찾습니다. 웹용 ONNX는 공식 가중치를 받아 내보내므로 [uv](https://docs.astral.sh/uv/)가 있어야 합니다.
 
 ### 3.4 앱 쪽 인터페이스
 
@@ -104,7 +114,8 @@ class Detection {
 | 구현 | 쓰는 때 |
 |---|---|
 | `FakePillDetector` | 모델 확정 전 화면 개발, 위젯 테스트. 고정된 결과를 돌려줌 |
-| `YoloPillDetector` | `ultralytics_yolo`로 실제 추론 |
+| `YoloPillDetector` | Android, iOS. `ultralytics_yolo`로 실제 추론 |
+| `OnnxPillDetector` | 웹. `web/pill_detector.js`(onnxruntime-web)로 실제 추론 |
 
 ### 3.5 정확도 한계와 앱의 대응
 
@@ -165,7 +176,8 @@ lib/
 ├── data/
 │   ├── models/               # Medication, Schedule, IntakeRecord, Detection
 │   ├── repositories/         # medication_repository.dart, intake_repository.dart
-│   └── services/             # database_service.dart, pill_detector.dart (+ fake, yolo)
+│   └── services/             # database_service.dart, pill_detector.dart (+ fake, yolo, onnx),
+│                             # platform_services(_web).dart: 플랫폼별 DB·사진 저장소·탐지기
 ├── ui/
 │   ├── home/                 # home_screen.dart, home_view_model.dart
 │   ├── capture/
@@ -174,12 +186,13 @@ lib/
 │   ├── medication/
 │   └── common/               # 공통 위젯, 테마
 └── utils/                    # intake_matcher.dart
-assets/models/                # pillbox-<태그>.tflite / .mlpackage.zip / .labels.json (Git 제외), VERSION
+assets/models/                # pillbox-<태그>.tflite / .mlpackage.zip / .onnx / .labels.json (Git 제외), VERSION
+web/pill_detector.js          # 웹 탐지 (onnxruntime-web)
 ```
 
 ### 5.2 데이터
 
-저장은 기기 안 SQLite(`sqflite`)입니다.
+저장은 기기 안 SQLite입니다. 앱은 `sqflite`, 웹은 `sqflite_common_ffi_web`(SQLite wasm, 브라우저 IndexedDB에 저장)을 씁니다.
 
 | 테이블 | 열 |
 |---|---|
@@ -187,94 +200,58 @@ assets/models/                # pillbox-<태그>.tflite / .mlpackage.zip / .labe
 | `schedules` | `id`, `medication_id`, `time`(HH:mm) |
 | `intake_records` | `id`, `medication_id`, `taken_at`, `count`, `source`(camera/manual), `photo_path` |
 
-사진은 앱 전용 폴더에만 저장하고, 기록을 지우면 함께 지웁니다.
+사진은 앱 전용 폴더(웹은 브라우저 안 별도 DB)에만 저장하고, 기록을 지우면 함께 지웁니다.
+
+웹은 기록이 **그 브라우저에만** 남습니다. 사이트 데이터를 지우면 기록도 지워지고, iOS Safari는 7일 동안 열지 않은 사이트의 저장소를 지울 수 있으므로 홈 화면에 추가해 쓰도록 안내합니다.
 
 ### 5.3 주요 패키지
 
 | 용도 | 패키지 |
 |---|---|
 | 상태관리 | `provider` |
-| 탐지 | `ultralytics_yolo` |
+| 탐지 | `ultralytics_yolo`(앱), onnxruntime-web(웹, CDN에서 `<script>`로 읽음) |
 | 카메라 | `camera` (갤러리는 2차에 `image_picker`) |
-| DB | `sqflite` |
+| DB | `sqflite`(앱), `sqflite_common_ffi_web`(웹) |
 | 화면 이동 | `go_router` |
 | 알림 (2차) | `flutter_local_notifications` |
 
-## 6. 배포: fastlane
+## 6. 배포: 웹 (GitHub Pages)
 
 ### 6.1 범위
 
-빌드는 `flutter build`로 하고, fastlane은 **스토어 테스트 채널에 올리는 일만** 맡깁니다. 플랫폼마다 lane 하나(`beta`)만 둡니다.
+먼저 웹으로 배포합니다. 스토어 계정·심사·서명 없이 링크만 나누면 휴대폰 브라우저에서 바로 씁니다. 서버는 두지 않고 `flutter build web` 결과를 정적 사이트로 올립니다.
 
 | 단계 | 내용 | 언제 |
 |---|---|---|
-| 0 | 로컬에서 `flutter run` / `flutter build` | 처음부터 |
-| 1 | fastlane `beta` lane: Android → Play Console 내부 테스트, iOS → TestFlight | 팀원·사용자에게 설치본을 처음 나눠 줄 때 |
-| 2 (선택) | GitHub Actions에서 태그 push 시 1단계 실행 | 수동 배포가 반복되어 번거로울 때 |
+| 0 | 로컬에서 `fvm flutter run -d chrome` | 처음부터 |
+| 1 | `main`에 합치면 GitHub Actions가 빌드해 GitHub Pages에 올림 | 지금 |
+| 2 | 앱 스토어 테스트 배포 (fastlane `beta`) | 앱이 필요해질 때. 설정은 `feat/fastlane-beta` 브랜치에 있음 |
 
-### 6.2 준비물
+### 6.2 워크플로
 
-| 플랫폼 | 필요한 것 |
+`.github/workflows/deploy-web.yml`
+
+| 단계 | 하는 일 |
 |---|---|
-| Android | Google Play Console 계정(1회 $25), 업로드 키스토어, Play API 서비스 계정 JSON |
-| iOS | Apple Developer Program(연 $99), Mac + Xcode, App Store Connect API 키(.p8) |
+| 모델 받기 | `scripts/fetch_model.sh` (`VERSION`의 태그). 받은 모델은 `VERSION`·스크립트가 바뀔 때까지 캐시 |
+| SQLite wasm | `dart run sqflite_common_ffi_web:setup`이 `web/sqlite3.wasm`, `web/sqflite_sw.js`를 만듦 (Git 제외) |
+| 빌드 | `flutter build web --base-href /<저장소 이름>/` |
+| 올리기 | `main` push일 때만 Pages에 배포. PR에서는 빌드만 확인 |
 
-키스토어, JSON, .p8은 Git에 올리지 않습니다(`.gitignore`). 경로는 환경 변수로 넘깁니다.
+- 주소는 `https://def-uk.github.io/pill-bbox-front/`입니다.
+- 처음 한 번 저장소 설정에서 Pages의 Source를 **GitHub Actions**로 바꿔야 합니다.
+- 화면 이동은 해시 URL(`/#/history`)이라 Pages에 별도 404 처리가 필요 없습니다.
 
-### 6.3 Fastfile
+### 6.3 로컬에서 웹 확인
 
-Flutter 문서대로 `android/`와 `ios/`에 fastlane을 따로 둡니다.
-
-`android/fastlane/Fastfile`
-
-```ruby
-default_platform(:android)
-
-platform :android do
-  desc "Play Console 내부 테스트 트랙에 올린다"
-  lane :beta do
-    upload_to_play_store(
-      track: "internal",
-      aab: "../build/app/outputs/bundle/release/app-release.aab",
-      json_key: ENV["PLAY_JSON_KEY_PATH"],
-    )
-  end
-end
+```bash
+scripts/fetch_model.sh
+fvm dart run sqflite_common_ffi_web:setup
+fvm flutter run -d chrome
 ```
 
-`ios/fastlane/Fastfile`
-
-```ruby
-default_platform(:ios)
-
-platform :ios do
-  desc "TestFlight에 올린다"
-  lane :beta do
-    api_key = app_store_connect_api_key(
-      key_id: ENV["ASC_KEY_ID"],
-      issuer_id: ENV["ASC_ISSUER_ID"],
-      key_filepath: ENV["ASC_KEY_PATH"],
-    )
-    upload_to_testflight(
-      api_key: api_key,
-      ipa: Dir["../build/ios/ipa/*.ipa"].first,
-      skip_waiting_for_build_processing: true,
-    )
-  end
-end
-```
-
-iOS 서명은 Xcode 자동 서명으로 시작합니다. 여러 사람이 각자 Mac에서 서명해야 할 때만 `match`를 더합니다.
-
-### 6.4 배포 명령
-
-| 상황 | 명령 |
-|---|---|
-| Android 테스트 배포 | `flutter build appbundle --build-number=<N>` → `cd android && bundle exec fastlane beta` |
-| iOS 테스트 배포 | `flutter build ipa --build-number=<N>` → `cd ios && bundle exec fastlane beta` |
-
-- 버전 이름은 `pubspec.yaml`의 `version`, 빌드 번호는 배포할 때마다 1씩 올립니다.
-- 모델을 바꾼 빌드는 릴리스 노트에 모델 태그(`assets/models/VERSION`)를 적습니다.
+- 카메라는 HTTPS나 `localhost`에서만 열립니다. 카메라가 없으면 샘플 사진으로 흐름을 확인합니다.
+- 모델을 바꾼 배포는 PR에 모델 태그(`assets/models/VERSION`)를 적습니다. 빌드에는 그때 `VERSION`에 적힌 모델이 들어갑니다.
 
 ## 7. 개발 순서
 
@@ -284,16 +261,16 @@ iOS 서명은 Xcode 자동 서명으로 시작합니다. 여러 사람이 각자
 | 2 | 약 관리, 일정, 기록, 홈(오늘) | 일정 등록 후 홈에 예정·완료가 보임 |
 | 3 | 모델 export, `YoloPillDetector` | 실제 기기에서 테스트 사진 10장의 결과가 모델 저장소 예측과 같음 |
 | 4 | 휴대폰 사진으로 성능 확인 | 실제로 찍은 사진 20장 이상의 인식 결과 정리, 모델 팀과 공유 |
-| 5 | fastlane `beta` | 팀원이 TestFlight / 내부 테스트로 설치 |
+| 5 | 웹 배포 (GitHub Pages) | 팀원이 휴대폰 브라우저에서 링크로 열어 촬영·기록 |
+| 5-1 (나중) | 앱 스토어 테스트 배포 (fastlane `beta`) | 팀원이 TestFlight / 내부 테스트로 설치 |
 | 6 (2차) | 알림, 갤러리 입력 | |
 
 ## 8. 결정할 것
 
 | 항목 | 기본값 | 정할 사람 |
 |---|---|---|
-| 지원 플랫폼 | Android, iOS 둘 다. Apple 계정이 없으면 Android 먼저 | 팀 |
-| 스토어 계정 | 위 6.2 준비물 | 팀 |
+| 지원 플랫폼 | 웹 먼저. 앱(Android, iOS)은 스토어 배포가 필요해질 때 | 팀 |
 | 최종 모델과 크기 | 모델 팀 결정. 기기 속도를 위해 s/n 크기 export도 함께 받아 비교 | 모델 팀 |
 | 알림을 MVP에 넣을지 | 2차 | 팀 |
 | 직접 등록한 약(56종 밖) 허용 | 허용하되 촬영 인식은 안 됨, 수동 기록만 | 팀 |
-| 탐지 플러그인 라이선스 | `ultralytics_yolo`와 모델이 AGPL-3.0. 배포 전 소스 공개 또는 Enterprise License | 팀 |
+| 탐지 플러그인 라이선스 | `ultralytics_yolo`와 모델이 AGPL-3.0. 웹은 모델 파일을 그대로 내려받게 하므로 공개 배포 전에 소스 공개 또는 Enterprise License | 팀 |
