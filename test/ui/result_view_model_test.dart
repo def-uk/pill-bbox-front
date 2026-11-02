@@ -210,6 +210,70 @@ void main() {
     );
   });
 
+  group('예전 기록으로 고칠 약 추천', () {
+    const orange = Appearance(l: 60, a: 35, b: 55, elongation: 1.8);
+    // FakePillDetector의 샘플약 C 박스와 같은 자리에서 찾은 물체.
+    const atC = [
+      FoundObject(box: Rect.fromLTRB(92, 378, 168, 512), appearance: orange),
+    ];
+
+    test('모델이 찾은 알약을 다른 약으로 고쳐 기록하면, 다음 사진에서 그 약으로 바꾸자고 한다', () async {
+      await register();
+      final first = await detect(objects: atC);
+      const c = '샘플약 C (주황색 타원형)';
+      expect(first.correctionOf(lineOf(first, c)), isNull);
+
+      first.changeMedication(lineOf(first, c), choiceOf(first, 'B'));
+      expect(await first.save(), isTrue);
+      final b = first.medications.singleWhere((m) => m.name == 'B');
+      expect(
+        [for (final (id, _) in await medications.appearances()) id],
+        [b.id],
+        reason: '고친 약에 색·모양을 남긴다',
+      );
+
+      final next = await detect(objects: atC);
+      expect(next.correctionOf(lineOf(next, c))?.id, b.id);
+      expect(
+        next.correctionOf(lineOf(next, 'A')),
+        isNull,
+        reason: '물체를 못 찾은 줄',
+      );
+    });
+
+    test('모델이 맞힌 대로 기록했으면 바꾸자고 하지 않는다', () async {
+      final first = await detect(objects: atC);
+      expect(await first.save(), isTrue);
+
+      final next = await detect(objects: atC);
+      final line = lineOf(next, '샘플약 C (주황색 타원형)');
+      expect(line.isRegistered, isTrue);
+      expect(next.correctionOf(line), isNull);
+    });
+
+    test('약마다 최근 색·모양만 남긴다', () async {
+      final id = await medications.save(
+        categoryId: null,
+        name: 'D',
+        dosePerTake: 1,
+        times: const [],
+      );
+      for (
+        var i = 0;
+        i < MedicationRepository.appearancesPerMedication + 5;
+        i++
+      ) {
+        await medications.addAppearance(
+          id,
+          Appearance(l: i.toDouble(), a: 0, b: 0, elongation: 1),
+        );
+      }
+      final kept = [for (final (_, a) in await medications.appearances()) a.l];
+      expect(kept, hasLength(MedicationRepository.appearancesPerMedication));
+      expect(kept.reduce((a, b) => a < b ? a : b), 5, reason: '오래된 5개를 지웠다');
+    });
+  });
+
   group('알 수 없는 물체', () {
     const yellow = Appearance(l: 70, a: 5, b: 45, elongation: 2.1);
     const purple = Appearance(l: 40, a: 30, b: -30, elongation: 1);
@@ -329,6 +393,19 @@ void main() {
       );
     });
 
+    test('모델을 쓰지 못해도 찾은 물체를 골라 기록할 수 있다', () async {
+      final vm = await detect(
+        detector: _FailingDetector(),
+        objects: [object(const Rect.fromLTRB(10, 10, 60, 60), yellow)],
+      );
+
+      expect(vm.status, ResultStatus.ready);
+      expect((vm.modelFailed, vm.noPills), (true, true));
+      vm.identify(vm.unknowns.single, choiceOf(vm, '샘플약 B (노란색 타원형)'));
+      expect(await vm.save(), isTrue);
+      expect(await intakes.recordsOn(now), hasLength(1));
+    });
+
     test('약이 아니라고 뺀 물체는 기록하지 않는다', () async {
       final vm = await detect(
         detector: _NoPillDetector(),
@@ -345,6 +422,14 @@ void main() {
 class _NoPillDetector implements PillDetector {
   @override
   Future<void> load() async {}
+
+  @override
+  Future<List<Detection>> detect(Uint8List imageBytes) async => const [];
+}
+
+class _FailingDetector implements PillDetector {
+  @override
+  Future<void> load() async => throw StateError('모델을 읽지 못했습니다');
 
   @override
   Future<List<Detection>> detect(Uint8List imageBytes) async => const [];

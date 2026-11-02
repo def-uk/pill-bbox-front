@@ -111,6 +111,9 @@ class ResultViewModel extends ChangeNotifier {
   /// 모델이 알약을 하나도 찾지 못했다.
   bool get noPills => detections.isEmpty;
 
+  /// 탐지 모델을 불러오지 못했거나 돌리다 실패했다. 이때는 색으로 찾은 물체만 보여 준다.
+  bool modelFailed = false;
+
   /// 등록한 약 전부.
   List<Medication> medications = const [];
 
@@ -135,6 +138,14 @@ class ResultViewModel extends ChangeNotifier {
 
   /// 줄마다 모델이 헷갈린 다른 약 (Detection.alternatives).
   final _alternatives = <_Target, List<Detection>>{};
+
+  /// 줄마다 예전 기록에서 색·모양이 더 비슷한 다른 약.
+  final _corrections = <_Target, Medication>{};
+
+  /// 예전 기록에서 [line]의 알약과 색·모양이 가장 비슷한 다른 약. 모델이 잘못 본 것 같을 때 바꿀 후보로,
+  /// 사용자가 전에 이 약을 고쳐 기록했으면 나온다.
+  Medication? correctionOf(ResultLine line) =>
+      _corrections[_targetOfLine(line)];
 
   /// 약 바꾸기에서 맨 위에 둘, 모델이 [line]과 헷갈린 약.
   List<PillChoice> alternativesOf(ResultLine line) {
@@ -194,16 +205,26 @@ class ResultViewModel extends ChangeNotifier {
       _allLabels = await _labels.load();
       final records = await _intakes.recordsOn(now);
       _due = dueNow(summarizeDay(medications, records), now);
+    } catch (e) {
+      errorMessage = '기록을 불러오지 못했습니다';
+      status = ResultStatus.failed;
+      _notify();
+      return;
+    }
 
+    // 물체 찾기는 모델과 따로 돌 수 있어 먼저 시작한다.
+    final around = _lookAround();
+    try {
       await _detector.load();
       detections = mergeOverlaps(await _detector.detect(photo));
-      _arrange(detections);
-      unknowns = await _unknownObjects();
-      status = ResultStatus.ready;
     } catch (e) {
-      errorMessage = '알약을 찾지 못했습니다';
-      status = ResultStatus.failed;
+      modelFailed = true;
     }
+    _arrange(detections);
+    final (objects, remembered) = await around;
+    _rememberDetections(objects, remembered);
+    unknowns = _unknownObjects(objects, remembered);
+    status = ResultStatus.ready;
     _notify();
   }
 
@@ -226,6 +247,7 @@ class ResultViewModel extends ChangeNotifier {
     } else {
       _unregistered.remove(line.categoryId);
     }
+    _corrections.remove(_targetOfLine(line));
     _retarget(_targetOfLine(line), _targetOf(choice));
     _addCount(choice, line.count);
     _notify();
@@ -308,35 +330,80 @@ class ResultViewModel extends ChangeNotifier {
     }
   }
 
-  /// 모델 박스와 절반 넘게 겹치지 않는 물체를 번호를 붙여 돌려준다. 물체 찾기가 실패해도 탐지 결과는 보여 준다.
-  Future<List<UnknownObject>> _unknownObjects() async {
-    final List<FoundObject> objects;
-    final List<(int, Appearance)> remembered;
+  /// 사진 속 물체와 예전에 남긴 색·모양. 실패해도 탐지 결과는 보여 주도록 빈 목록으로 넘어간다.
+  Future<(List<FoundObject>, List<(int, Appearance)>)> _lookAround() async {
     try {
-      objects = await _findObjects(photo);
-      remembered = await _medications.appearances();
+      return (await _findObjects(photo), await _medications.appearances());
     } catch (_) {
-      return const [];
+      return (const <FoundObject>[], const <(int, Appearance)>[]);
     }
+  }
+
+  /// 모델이 찾은 알약마다 같은 자리의 물체에서 색·모양을 얻는다. 저장할 때 그 줄의 약에(사용자가 고치면
+  /// 고친 약에) 남기고, 예전 기록에서 다른 약과 더 비슷하면 그 약을 바꿀 후보로 둔다.
+  void _rememberDetections(
+    List<FoundObject> objects,
+    List<(int, Appearance)> remembered,
+  ) {
+    final byCategory = {
+      for (final m in medications)
+        if (m.categoryId != null) m.categoryId!: m,
+    };
+    for (final d in detections) {
+      FoundObject? same;
+      var bestIoU = _sameObjectIoU;
+      for (final o in objects) {
+        final iou = boxIoU(o.box, d.box);
+        if (iou >= bestIoU) {
+          same = o;
+          bestIoU = iou;
+        }
+      }
+      if (same == null) continue;
+      final medication = byCategory[d.categoryId];
+      final target = (
+        medicationId: medication?.id,
+        key: medication == null ? d.categoryId : null,
+      );
+      _picked.add((target, same.appearance));
+      final similar = _similar(same.appearance, remembered);
+      if (similar != null && similar.id != medication?.id) {
+        _corrections.putIfAbsent(target, () => similar);
+      }
+    }
+  }
+
+  /// 모델 박스와 물체 찾기 박스가 이만큼 겹치면 같은 알약으로 본다.
+  static const _sameObjectIoU = 0.5;
+
+  /// 예전에 남긴 색·모양 중 [appearance]와 가장 가까운 약. [Appearance.similarDistance] 안에 없으면 null.
+  Medication? _similar(
+    Appearance appearance,
+    List<(int, Appearance)> remembered,
+  ) {
+    final byId = {for (final m in medications) m.id: m};
+    Medication? best;
+    var bestDistance = Appearance.similarDistance;
+    for (final (id, known) in remembered) {
+      final distance = appearance.distanceTo(known);
+      if (distance < bestDistance && byId[id] != null) {
+        best = byId[id];
+        bestDistance = distance;
+      }
+    }
+    return best;
+  }
+
+  /// 모델 박스와 절반 넘게 겹치지 않는 물체를 번호를 붙여 돌려준다.
+  List<UnknownObject> _unknownObjects(
+    List<FoundObject> objects,
+    List<(int, Appearance)> remembered,
+  ) {
     bool coveredByModel(Rect box) => detections.any((d) {
       final overlap = d.box.intersect(box);
       return !overlap.isEmpty &&
           overlap.width * overlap.height > 0.5 * box.width * box.height;
     });
-    final byId = {for (final m in medications) m.id: m};
-    Medication? similar(Appearance appearance) {
-      Medication? best;
-      var bestDistance = Appearance.similarDistance;
-      for (final (id, known) in remembered) {
-        final distance = appearance.distanceTo(known);
-        if (distance < bestDistance && byId[id] != null) {
-          best = byId[id];
-          bestDistance = distance;
-        }
-      }
-      return best;
-    }
-
     final unknown = [
       for (final o in objects)
         if (!coveredByModel(o.box)) o,
@@ -347,7 +414,7 @@ class ResultViewModel extends ChangeNotifier {
           number: i + 1,
           box: o.box,
           appearance: o.appearance,
-          suggestion: similar(o.appearance),
+          suggestion: _similar(o.appearance, remembered),
         ),
     ];
   }

@@ -51,7 +51,7 @@ List<Detection> mergeOverlaps(List<Detection> detections) {
   final kept = <Detection>[];
   final alternatives = <List<Detection>>[];
   for (final d in sorted) {
-    final i = kept.indexWhere((k) => _iou(k.box, d.box) > sameObjectIoU);
+    final i = kept.indexWhere((k) => boxIoU(k.box, d.box) > sameObjectIoU);
     if (i < 0) {
       kept.add(d);
       alternatives.add([]);
@@ -72,7 +72,8 @@ List<Detection> mergeOverlaps(List<Detection> detections) {
   ];
 }
 
-double _iou(Rect a, Rect b) {
+/// 두 박스가 겹친 넓이 / 합친 넓이.
+double boxIoU(Rect a, Rect b) {
   final overlap = a.intersect(b);
   if (overlap.width <= 0 || overlap.height <= 0) return 0;
   final inter = overlap.width * overlap.height;

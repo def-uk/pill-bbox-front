@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/models/medication.dart';
 import '../../utils/intake_matcher.dart';
 import '../common/theme.dart';
 import 'result_view_model.dart';
@@ -26,8 +27,7 @@ class ResultScreen extends StatelessWidget {
 
     Future<PillChoice?> pick(
       String title, {
-      List<PillChoice> suggestions = const [],
-      String suggestionNote = '',
+      List<(PillChoice, String)> suggestions = const [],
     }) => showModalBottomSheet<PillChoice>(
       context: context,
       isScrollControlled: true,
@@ -36,32 +36,34 @@ class ResultScreen extends StatelessWidget {
         title: title,
         choices: vm.choices,
         suggestions: suggestions,
-        suggestionNote: suggestionNote,
       ),
     );
+
+    PillChoice choiceOf(Medication m) =>
+        PillChoice(medication: m, categoryId: m.categoryId, name: m.name);
 
     Future<void> identify(UnknownObject object) async {
       final similar = object.suggestion;
       final choice = await pick(
         '물체 ${object.number}은(는) 어떤 약인가요?',
         suggestions: [
-          if (similar != null)
-            PillChoice(
-              medication: similar,
-              categoryId: similar.categoryId,
-              name: similar.name,
-            ),
+          if (similar != null) (choiceOf(similar), '예전에 기록한 약과 색·모양이 비슷해요'),
         ],
-        suggestionNote: '예전에 고른 약과 색·모양이 비슷해요',
       );
       if (choice != null) vm.identify(object, choice);
     }
 
     Future<void> changeMedication(ResultLine line) async {
+      final correction = vm.correctionOf(line);
       final choice = await pick(
         '${line.name}을(를) 어떤 약으로 바꿀까요?',
-        suggestions: vm.alternativesOf(line),
-        suggestionNote: '모델이 이 약과 헷갈렸어요',
+        suggestions: [
+          if (correction != null)
+            (choiceOf(correction), '예전에 기록한 약과 색·모양이 비슷해요'),
+          for (final c in vm.alternativesOf(line))
+            if (c.medication == null || c.medication!.id != correction?.id)
+              (c, '모델이 이 약과 헷갈렸어요'),
+        ],
       );
       if (choice != null) vm.changeMedication(line, choice);
     }
@@ -89,7 +91,11 @@ class ResultScreen extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 16),
           children: [
             _PhotoWithBoxes(vm: vm),
-            if (vm.noPills) _NoPills(hasUnknowns: vm.unknowns.isNotEmpty),
+            if (vm.noPills)
+              _NoPills(
+                hasUnknowns: vm.unknowns.isNotEmpty,
+                modelFailed: vm.modelFailed,
+              ),
             if (vm.unknowns.isNotEmpty) ...[
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
@@ -126,7 +132,10 @@ class ResultScreen extends StatelessWidget {
             for (final line in vm.lines)
               ListTile(
                 title: Text(line.name),
-                subtitle: _LineStatus(line: line),
+                subtitle: _LineStatus(
+                  line: line,
+                  correction: vm.correctionOf(line),
+                ),
                 onTap: () => changeMedication(line),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -189,11 +198,12 @@ class ResultScreen extends StatelessWidget {
   }
 }
 
-/// 예정과 비교한 결과. 예: "예정대로", "예정 2정 중 1정"
+/// 예정과 비교한 결과. 예: "예정대로", "예정 2정 중 1정". 예전 기록에서 더 비슷한 약이 있으면 함께 알린다.
 class _LineStatus extends StatelessWidget {
-  const _LineStatus({required this.line});
+  const _LineStatus({required this.line, this.correction});
 
   final ResultLine line;
+  final Medication? correction;
 
   @override
   Widget build(BuildContext context) {
@@ -214,15 +224,27 @@ class _LineStatus extends StatelessWidget {
       ),
       ResultLine(status: MatchStatus.unscheduled) => ('지금 예정에 없는 약', outline),
     };
-    return Text(text, style: TextStyle(color: color));
+    final status = Text(text, style: TextStyle(color: color));
+    if (correction == null) return status;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        status,
+        Text(
+          '${correction!.name}과(와) 더 비슷해요 · 눌러서 바꾸기',
+          style: TextStyle(color: reviewColor),
+        ),
+      ],
+    );
   }
 }
 
-/// 모델이 알약을 하나도 찾지 못했을 때.
+/// 모델이 알약을 하나도 찾지 못했거나, 모델을 쓰지 못했을 때.
 class _NoPills extends StatelessWidget {
-  const _NoPills({required this.hasUnknowns});
+  const _NoPills({required this.hasUnknowns, required this.modelFailed});
 
   final bool hasUnknowns;
+  final bool modelFailed;
 
   @override
   Widget build(BuildContext context) {
@@ -231,12 +253,18 @@ class _NoPills extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
       child: Column(
         children: [
-          Text('알약이 없습니다', style: textTheme.titleLarge),
+          Text(
+            modelFailed ? '알약 인식 모델을 쓰지 못했습니다' : '알약이 없습니다',
+            style: textTheme.titleLarge,
+          ),
           const SizedBox(height: 8),
           Text(
-            hasUnknowns
-                ? '알약으로 보이지 않는 물체가 있습니다. 약이 맞다면 눌러서 무엇인지 알려 주세요.'
-                : '사진에서 알약을 찾지 못했습니다. 다른 사진을 쓰거나 약을 직접 추가해 주세요.',
+            switch ((modelFailed, hasUnknowns)) {
+              (true, true) => '색으로 찾은 물체를 눌러 어떤 약인지 알려 주세요.',
+              (true, false) => '약을 직접 추가하거나 잠시 뒤 다시 해 주세요.',
+              (false, true) => '알약으로 보이지 않는 물체가 있습니다. 약이 맞다면 눌러서 무엇인지 알려 주세요.',
+              (false, false) => '사진에서 알약을 찾지 못했습니다. 다른 사진을 쓰거나 약을 직접 추가해 주세요.',
+            },
             textAlign: TextAlign.center,
             style: textTheme.bodyMedium,
           ),
@@ -252,15 +280,13 @@ class _ChoiceSearchSheet extends StatefulWidget {
     required this.title,
     required this.choices,
     this.suggestions = const [],
-    this.suggestionNote = '',
   });
 
   final String title;
   final List<PillChoice> choices;
 
-  /// 맨 위에 둘 약: 색·모양이 비슷한 약이나 모델이 헷갈린 약. 왜 추천하는지는 [suggestionNote].
-  final List<PillChoice> suggestions;
-  final String suggestionNote;
+  /// 맨 위에 둘 약과 추천하는 까닭: 색·모양이 비슷한 약이나 모델이 헷갈린 약.
+  final List<(PillChoice, String)> suggestions;
 
   @override
   State<_ChoiceSearchSheet> createState() => _ChoiceSearchSheetState();
@@ -273,9 +299,9 @@ class _ChoiceSearchSheetState extends State<_ChoiceSearchSheet> {
   Widget build(BuildContext context) {
     final suggestions = _query.isEmpty ? widget.suggestions : const [];
     bool suggested(PillChoice c) => suggestions.any(
-      (s) => s.medication != null
-          ? s.medication!.id == c.medication?.id
-          : c.medication == null && s.categoryId == c.categoryId,
+      (s) => s.$1.medication != null
+          ? s.$1.medication!.id == c.medication?.id
+          : c.medication == null && s.$1.categoryId == c.categoryId,
     );
     final matches = [
       for (final c in widget.choices)
@@ -303,11 +329,11 @@ class _ChoiceSearchSheetState extends State<_ChoiceSearchSheet> {
             Expanded(
               child: ListView(
                 children: [
-                  for (final c in suggestions)
+                  for (final (c, note) in suggestions)
                     ListTile(
                       leading: const Icon(Icons.auto_awesome),
                       title: Text(c.name),
-                      subtitle: Text(widget.suggestionNote),
+                      subtitle: Text(note),
                       onTap: () => Navigator.pop(context, c),
                     ),
                   for (final c in matches)
