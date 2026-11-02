@@ -54,6 +54,8 @@ void main() {
     expect(find.text('1회 2정'), findsOneWidget);
 
     // 사진 올리기 → 결과 확인: A는 예정대로, B·C는 처음 기록하는 약
+    await tester.tap(find.text('기록하기'));
+    await pumpUntilFound(tester, find.text('사진 올리기'));
     await tester.tap(find.text('사진 올리기'));
     await pumpUntilFound(tester, find.text('인식된 약'));
     expect(find.text('✓ 예정대로', findRichText: true), findsOneWidget);

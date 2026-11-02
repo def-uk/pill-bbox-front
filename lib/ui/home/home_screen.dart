@@ -52,6 +52,51 @@ class HomeScreen extends StatelessWidget {
       }
     }
 
+    // 웹은 사용자가 누른 그 순간에 열어야 브라우저가 카메라·파일 창을 막지 않는다.
+    // 그래서 시트를 닫는 것과 같은 탭 처리 안에서 바로 연다.
+    void chooseSource() => showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Row(
+            children: [
+              for (final (source, icon, label) in [
+                (PhotoSource.camera, Icons.photo_camera, '사진 찍기'),
+                (PhotoSource.gallery, Icons.photo_library, '사진 올리기'),
+              ])
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: FilledButton.tonal(
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(sheet);
+                        pickPhoto(source);
+                      },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(icon, size: 32),
+                          const SizedBox(height: 8),
+                          Text(label),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: Text('오늘 · ${formatDate(vm.today)}'),
@@ -91,7 +136,7 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
         _ => ListView(
-          padding: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.only(bottom: 96),
           children: [
             for (final (time, slots) in vm.slotsByTime) ...[
               Padding(
@@ -132,33 +177,10 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       },
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: vm.picking
-                      ? null
-                      : () => pickPhoto(PhotoSource.camera),
-                  icon: const Icon(Icons.photo_camera),
-                  label: const Text('사진 찍기'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.tonalIcon(
-                  onPressed: vm.picking
-                      ? null
-                      : () => pickPhoto(PhotoSource.gallery),
-                  icon: const Icon(Icons.photo_library),
-                  label: const Text('사진 올리기'),
-                ),
-              ),
-            ],
-          ),
-        ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: vm.picking ? null : chooseSource,
+        icon: const Icon(Icons.add),
+        label: const Text('기록하기'),
       ),
     );
   }

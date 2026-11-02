@@ -29,6 +29,8 @@ void main() {
     );
     await pumpUntilFound(tester, find.textContaining('오늘 기록이 없습니다'));
 
+    await tester.tap(find.text('기록하기'));
+    await pumpUntilFound(tester, find.text('사진 찍기'));
     await tester.tap(find.text('사진 찍기'));
     await pumpUntilFound(tester, find.text('인식된 약'));
     expect(
