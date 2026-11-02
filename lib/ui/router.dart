@@ -47,6 +47,7 @@ GoRouter buildRouter() => GoRouter(
           detector: context.read(),
           medications: context.read(),
           intakes: context.read(),
+          labels: context.read(),
         )..detect(),
         child: const ResultScreen(),
       ),

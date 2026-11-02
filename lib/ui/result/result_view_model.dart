@@ -2,9 +2,11 @@ import 'package:flutter/foundation.dart';
 
 import '../../data/models/detection.dart';
 import '../../data/models/medication.dart';
+import '../../data/models/pill_label.dart';
 import '../../data/repositories/intake_repository.dart';
 import '../../data/repositories/medication_repository.dart';
 import '../../data/services/pill_detector.dart';
+import '../../data/services/pill_label_service.dart';
 import '../../utils/intake_matcher.dart';
 
 /// 이 값보다 신뢰도가 낮으면 "확인 필요". 모델 저장소의 POINT_CONF와 같다.
@@ -23,7 +25,7 @@ class ResultLine {
     required this.needsReview,
   });
 
-  /// 등록한 약. 등록하지 않은 약으로 인식했으면 null이고, 저장되지 않는다.
+  /// 등록한 약. 처음 기록하는 약이면 null이고, 저장할 때 등록한다.
   final Medication? medication;
   final int? categoryId;
   final String name;
@@ -37,12 +39,22 @@ class ResultLine {
   MatchStatus get status => matchStatus(expected: expected, recognized: count);
 }
 
+/// 약 바꾸기·약 추가에서 고를 수 있는 약. 등록한 약이거나, 모델이 아는 약 중 아직 등록하지 않은 약.
+class PillChoice {
+  const PillChoice({this.medication, this.categoryId, required this.name});
+
+  final Medication? medication;
+  final int? categoryId;
+  final String name;
+}
+
 class ResultViewModel extends ChangeNotifier {
   ResultViewModel({
     required this.photo,
     required this._detector,
     required this._medications,
     required this._intakes,
+    required this._labels,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now;
 
@@ -50,6 +62,7 @@ class ResultViewModel extends ChangeNotifier {
   final PillDetector _detector;
   final MedicationRepository _medications;
   final IntakeRepository _intakes;
+  final PillLabelService _labels;
   final DateTime Function() _now;
   bool _disposed = false;
 
@@ -57,8 +70,11 @@ class ResultViewModel extends ChangeNotifier {
   String? errorMessage;
   List<Detection> detections = const [];
 
-  /// 등록한 약 전부. 약 바꾸기·약 추가에서 고른다.
+  /// 등록한 약 전부.
   List<Medication> medications = const [];
+
+  /// 모델이 아는 약 전부.
+  List<PillLabel> _allLabels = const [];
 
   Map<int, int> _due = {};
   final _counts = <int, int>{};
@@ -67,8 +83,20 @@ class ResultViewModel extends ChangeNotifier {
   /// 등록한 약 줄의 순서. medication_id.
   final _order = <int>[];
 
-  /// 등록하지 않은 약. category_id → 줄.
+  /// 처음 기록하는 약. category_id → 줄.
   final _unregistered = <int, ResultLine>{};
+
+  /// 약 바꾸기·약 추가에서 고를 수 있는 약. 등록한 약 먼저.
+  List<PillChoice> get choices {
+    final registered = {for (final m in medications) m.categoryId};
+    return [
+      for (final m in medications)
+        PillChoice(medication: m, categoryId: m.categoryId, name: m.name),
+      for (final l in _allLabels)
+        if (!registered.contains(l.categoryId))
+          PillChoice(categoryId: l.categoryId, name: l.name),
+    ];
+  }
 
   List<ResultLine> get lines {
     final byId = {for (final m in medications) m.id: m};
@@ -86,14 +114,16 @@ class ResultViewModel extends ChangeNotifier {
     ];
   }
 
-  bool get hasUnregistered => _unregistered.values.any((l) => l.count > 0);
   bool get canSave =>
-      status == ResultStatus.ready && _counts.values.any((c) => c > 0);
+      status == ResultStatus.ready &&
+      (_counts.values.any((c) => c > 0) ||
+          _unregistered.values.any((l) => l.count > 0));
 
   Future<void> detect() async {
     try {
       final now = _now();
       medications = await _medications.getAll();
+      _allLabels = await _labels.load();
       final records = await _intakes.recordsOn(now);
       _due = dueNow(summarizeDay(medications, records), now);
 
@@ -114,9 +144,12 @@ class ResultViewModel extends ChangeNotifier {
     if (line.count > 0) _setCount(line, line.count - 1);
   }
 
-  /// [line]의 개수를 [medication]으로 옮긴다. 모델이 다른 약으로 인식했을 때 쓴다.
-  void changeMedication(ResultLine line, Medication medication) {
-    if (line.medication?.id == medication.id) return;
+  /// [line]의 개수를 [choice]로 옮긴다. 모델이 다른 약으로 인식했을 때 쓴다.
+  void changeMedication(ResultLine line, PillChoice choice) {
+    final same = choice.medication == null
+        ? line.medication == null && line.categoryId == choice.categoryId
+        : line.medication?.id == choice.medication!.id;
+    if (same) return;
     if (line.medication case final from?) {
       _counts.remove(from.id);
       _review.remove(from.id);
@@ -124,22 +157,23 @@ class ResultViewModel extends ChangeNotifier {
     } else {
       _unregistered.remove(line.categoryId);
     }
-    _addCount(medication, line.count);
+    _addCount(choice, line.count);
     _notify();
   }
 
   /// 모델이 못 찾은 약을 1정 더한다.
-  void addMedication(Medication medication) {
-    _addCount(medication, 1);
+  void addMedication(PillChoice choice) {
+    _addCount(choice, 1);
     _notify();
   }
 
-  /// 확인한 개수로 복용 기록을 저장한다. 저장했으면 true.
+  /// 확인한 개수로 복용 기록을 저장한다. 처음 기록하는 약은 먼저 등록한다. 저장했으면 true.
   Future<bool> save() async {
     if (!canSave) return false;
     status = ResultStatus.saving;
     _notify();
     try {
+      await _registerNewMedications();
       await _intakes.addCameraIntake(photo: photo, countsByMedication: _counts);
       return true;
     } catch (e) {
@@ -183,9 +217,43 @@ class ResultViewModel extends ChangeNotifier {
     }
   }
 
-  void _addCount(Medication medication, int count) {
-    _counts[medication.id] = (_counts[medication.id] ?? 0) + count;
-    if (!_order.contains(medication.id)) _order.add(medication.id);
+  void _addCount(PillChoice choice, int count) {
+    if (choice.medication case final medication?) {
+      _counts[medication.id] = (_counts[medication.id] ?? 0) + count;
+      if (!_order.contains(medication.id)) _order.add(medication.id);
+      return;
+    }
+    final current = _unregistered[choice.categoryId];
+    _unregistered[choice.categoryId!] = ResultLine(
+      medication: null,
+      categoryId: choice.categoryId,
+      name: choice.name,
+      count: (current?.count ?? 0) + count,
+      expected: 0,
+      needsReview: current?.needsReview ?? false,
+    );
+  }
+
+  /// 처음 기록하는 약을 복용 시간 없이 등록하고 등록한 약 줄로 옮긴다. 1회 수량은 이번에 확인한 개수.
+  ///
+  /// 기록 저장이 실패해 다시 저장할 때 같은 약을 또 등록하지 않도록 바로 옮긴다.
+  Future<void> _registerNewMedications() async {
+    final lines = [..._unregistered.values.where((l) => l.count > 0)];
+    if (lines.isEmpty) return;
+    for (final line in lines) {
+      final id = await _medications.save(
+        // 음수는 labels.json에 없는 클래스라 인식 대상으로 등록하지 않는다 (toDetections).
+        categoryId: line.categoryId! < 0 ? null : line.categoryId,
+        name: line.name,
+        dosePerTake: line.count,
+        times: const [],
+      );
+      _unregistered.remove(line.categoryId);
+      _counts[id] = line.count;
+      _order.add(id);
+      if (line.needsReview) _review.add(id);
+    }
+    medications = await _medications.getAll();
   }
 
   void _setCount(ResultLine line, int count) {

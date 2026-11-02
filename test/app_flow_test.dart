@@ -25,9 +25,11 @@ void main() {
         labels: PillLabelService(),
       ),
     );
-    await pumpUntilFound(tester, find.text('복용할 약을 먼저 등록해 주세요'));
+    await pumpUntilFound(tester, find.text('복용 시간 정하기'));
 
     // 약 등록: 샘플약 A, 1회 2정, 08:00
+    await tester.tap(find.text('복용 시간 정하기'));
+    await pumpUntilFound(tester, find.text('등록한 약이 없습니다'));
     await tester.tap(find.text('약 등록'));
     await pumpUntilFound(tester, find.text('약을 고르세요'));
     await tester.tap(find.text('약을 고르세요'));
@@ -41,20 +43,24 @@ void main() {
     await pumpUntilFound(tester, find.text('08:00'));
     await tester.tap(find.text('저장'));
 
+    // 약 관리 → 홈
+    await pumpUntilFound(tester, find.text('1회 2정 · 08:00'));
+    await tester.tap(find.byType(BackButton));
+
     // 홈: 08:00에 A 2정 예정
     await pumpUntilFound(tester, find.text('예정'));
     expect(find.text('08:00'), findsOneWidget);
     expect(find.text('샘플약 A (흰색 원형)'), findsOneWidget);
     expect(find.text('1회 2정'), findsOneWidget);
 
-    // 사진 올리기 → 결과 확인: A는 예정대로, B·C는 등록하지 않은 약
+    // 사진 올리기 → 결과 확인: A는 예정대로, B·C는 처음 기록하는 약
     await tester.tap(find.text('사진 올리기'));
     await pumpUntilFound(tester, find.text('샘플 사진으로 해 보기'));
     await tester.tap(find.text('샘플 사진으로 해 보기'));
     await pumpUntilFound(tester, find.text('인식된 약'));
     expect(find.text('✓ 예정대로', findRichText: true), findsOneWidget);
     expect(
-      find.textContaining('등록하지 않은 약 · 눌러서 바꾸기', findRichText: true),
+      find.textContaining('처음 기록하는 약', findRichText: true),
       findsNWidgets(2),
     );
 

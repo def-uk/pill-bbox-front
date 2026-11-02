@@ -46,15 +46,14 @@ class HomeScreen extends StatelessWidget {
         HomeViewModel(loading: true) => const Center(
           child: CircularProgressIndicator(),
         ),
-        HomeViewModel(medications: []) => _Empty(
-          message: '복용할 약을 먼저 등록해 주세요',
-          action: FilledButton(
-            onPressed: () => context.push('/medications/new'),
-            child: const Text('약 등록'),
-          ),
-        ),
         HomeViewModel(summary: DaySummary(slots: [], unscheduled: [])) =>
-          const _Empty(message: '등록한 약에 복용 시간이 없습니다.\n약 관리에서 복용 시간을 넣어 주세요.'),
+          _Empty(
+            message: '오늘 기록이 없습니다.\n사진을 올리면 인식한 약이 바로 기록됩니다.',
+            action: TextButton(
+              onPressed: () => context.push('/medications'),
+              child: const Text('복용 시간 정하기'),
+            ),
+          ),
         _ => ListView(
           padding: const EdgeInsets.only(bottom: 96),
           children: [
@@ -77,7 +76,10 @@ class HomeScreen extends StatelessWidget {
             if (vm.summary.unscheduled.isNotEmpty) ...[
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-                child: Text('일정 외 기록', style: textTheme.titleMedium),
+                child: Text(
+                  vm.summary.slots.isEmpty ? '오늘 기록' : '일정 외 기록',
+                  style: textTheme.titleMedium,
+                ),
               ),
               for (final record in vm.summary.unscheduled)
                 ListTile(
