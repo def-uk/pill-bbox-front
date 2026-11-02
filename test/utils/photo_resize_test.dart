@@ -9,34 +9,33 @@ void main() {
       img.Image(width: width, height: height)
         ..clear(img.ColorRgb8(200, 180, 160));
 
+  (int, int) sizeOf(Uint8List jpeg) {
+    final decoded = img.decodeJpg(jpeg)!;
+    return (decoded.width, decoded.height);
+  }
+
   test('큰 PNG는 긴 변을 줄인 JPEG로 바꾼다', () {
-    final png = img.encodePng(photo(1000, 2000));
+    final out = shrinkPhoto(img.encodePng(photo(1000, 2000)));
 
-    final out = shrinkPhoto(png);
-
-    final decoded = img.decodeJpg(out)!;
-    expect((decoded.width, decoded.height), (640, photoMaxSide));
+    expect(sizeOf(out), (photoMaxSide ~/ 2, photoMaxSide));
   });
 
   test('작은 PNG도 JPEG로 바꾸고 크기는 그대로 둔다', () {
-    final out = shrinkPhoto(img.encodePng(photo(800, 600)));
+    final out = shrinkPhoto(img.encodePng(photo(400, 300)));
 
-    final decoded = img.decodeJpg(out)!;
-    expect((decoded.width, decoded.height), (800, 600));
+    expect(sizeOf(out), (400, 300));
   });
 
   test('이미 작은 JPEG는 그대로 돌려준다', () {
-    final jpeg = img.encodeJpg(photo(1280, 960));
+    final jpeg = img.encodeJpg(photo(photoMaxSide, photoMaxSide * 3 ~/ 4));
 
     expect(identical(shrinkPhoto(jpeg), jpeg), isTrue);
   });
 
   test('큰 JPEG는 줄인다', () {
-    final decoded = img.decodeJpg(
-      shrinkPhoto(img.encodeJpg(photo(4000, 3000))),
-    )!;
+    final out = shrinkPhoto(img.encodeJpg(photo(4000, 3000)));
 
-    expect((decoded.width, decoded.height), (photoMaxSide, 960));
+    expect(sizeOf(out), (photoMaxSide, photoMaxSide * 3 ~/ 4));
   });
 
   test('읽을 수 없으면 그대로 돌려준다', () {

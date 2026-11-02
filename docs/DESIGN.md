@@ -211,7 +211,7 @@ web/pill_detector.js          # 웹 탐지 (onnxruntime-web)
 |---|---|
 | 상태관리 | `provider` |
 | 탐지 | `ultralytics_yolo`(앱), onnxruntime-web(웹, CDN에서 `<script>`로 읽음) |
-| 사진 선택 | `image_picker`, `image` (긴 변 1280px, JPEG 품질 80으로 줄여 저장. 웹의 image_picker는 PNG를 PNG로 두므로 `image`로 다시 씀) |
+| 사진 선택 | `image_picker`, `image` (긴 변 640px(모델 입력과 같음), JPEG 품질 80으로 줄여 저장. 웹의 image_picker는 PNG를 PNG로 두므로 `image`로 다시 씀) |
 | DB | `sqflite`(앱), `sqflite_common_ffi_web`(웹) |
 | 화면 이동 | `go_router` |
 | 알림 (2차) | `flutter_local_notifications` |

@@ -3,8 +3,8 @@ import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
 
-/// 저장하는 사진의 긴 변. 탐지 모델 입력(640)보다 크고, 기록 화면에서 보기에 넉넉하다.
-const photoMaxSide = 1280;
+/// 저장하는 사진의 긴 변. 탐지 모델 입력과 같아, 더 크게 둬도 인식은 나아지지 않는다.
+const photoMaxSide = 640;
 
 /// 저장하는 사진의 JPEG 품질.
 const photoJpegQuality = 80;
