@@ -1,10 +1,10 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pillbbox/data/services/database_service.dart';
 import 'package:pillbbox/data/services/photo_picker_service.dart';
 import 'package:pillbbox/data/services/photo_storage_service.dart';
+import 'package:pillbbox/ui/home/home_view_model.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// 메모리 DB. 위젯 테스트의 가짜 시간 안에서도 돌도록 isolate를 쓰지 않는다.
@@ -34,10 +34,17 @@ class FakePhotoStorageService implements PhotoStorageService {
   Future<void> delete(String relativePath) async => photos.remove(relativePath);
 }
 
-/// 사진을 고르지 않고 닫는다. 위젯 테스트에서는 샘플 사진으로 흐름을 확인한다.
-class NoPhotoPickerService extends PhotoPickerService {
+/// 카메라든 갤러리든 샘플 사진을 돌려준다.
+class SamplePhotoPickerService extends PhotoPickerService {
+  final sources = <PhotoSource>[];
+
   @override
-  Future<Uint8List?> pick() async => null;
+  Future<Uint8List?> pick(PhotoSource source) async {
+    sources.add(source);
+    return (await rootBundle.load(
+      HomeViewModel.samplePhotoAsset,
+    )).buffer.asUint8List();
+  }
 }
 
 /// 실제 비동기 작업(에셋 읽기 등)과 가짜 시계의 타이머를 함께 진행하며 [finder]가 나올 때까지 그린다.

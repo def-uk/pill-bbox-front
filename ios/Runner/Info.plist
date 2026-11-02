@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>복용할 알약을 찍어 약 종류와 개수를 기록합니다.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>복용할 알약 사진을 골라 약 종류와 개수를 기록합니다.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
