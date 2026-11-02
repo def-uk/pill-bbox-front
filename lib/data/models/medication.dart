@@ -20,7 +20,7 @@ class Medication {
 
   final int id;
 
-  /// 탐지 모델 56종 중 하나. 직접 등록한 약은 null이고 사진으로 인식되지 않는다.
+  /// 탐지 모델이 아는 약(labels.json)의 category_id. 직접 이름을 넣은 약은 null이고 사진으로 인식되지 않는다.
   final int? categoryId;
   final String name;
   final int dosePerTake;

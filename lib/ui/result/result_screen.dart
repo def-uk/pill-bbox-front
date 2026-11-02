@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../../data/models/detection.dart';
 import '../../utils/intake_matcher.dart';
-import '../common/medication_picker.dart';
 import '../common/theme.dart';
 import 'result_view_model.dart';
 
@@ -25,22 +24,21 @@ class ResultScreen extends StatelessWidget {
       }
     }
 
+    Future<PillChoice?> pick(String title) => showModalBottomSheet<PillChoice>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _ChoiceSearchSheet(title: title, choices: vm.choices),
+    );
+
     Future<void> changeMedication(ResultLine line) async {
-      final medication = await showMedicationPicker(
-        context,
-        title: '${line.name}을(를) 어떤 약으로 바꿀까요?',
-        medications: vm.medications,
-      );
-      if (medication != null) vm.changeMedication(line, medication);
+      final choice = await pick('${line.name}을(를) 어떤 약으로 바꿀까요?');
+      if (choice != null) vm.changeMedication(line, choice);
     }
 
     Future<void> addMedication() async {
-      final medication = await showMedicationPicker(
-        context,
-        title: '추가할 약',
-        medications: vm.medications,
-      );
-      if (medication != null) vm.addMedication(medication);
+      final choice = await pick('추가할 약');
+      if (choice != null) vm.addMedication(choice);
     }
 
     return Scaffold(
@@ -69,7 +67,9 @@ class ResultScreen extends StatelessWidget {
               ),
             ),
             if (vm.lines.isEmpty)
-              const ListTile(title: Text('알약을 찾지 못했습니다. 다시 찍거나 약을 추가해 주세요.')),
+              const ListTile(
+                title: Text('알약을 찾지 못했습니다. 다른 사진을 올리거나 약을 추가해 주세요.'),
+              ),
             for (final line in vm.lines)
               ListTile(
                 title: Text(line.name),
@@ -105,14 +105,6 @@ class ResultScreen extends StatelessWidget {
                 ),
               ),
             ),
-            if (vm.hasUnregistered)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  '등록하지 않은 약은 저장되지 않습니다. 눌러서 등록한 약으로 바꿔 주세요.',
-                  style: TextStyle(color: reviewColor),
-                ),
-              ),
           ],
         ),
       },
@@ -154,7 +146,7 @@ class _LineStatus extends StatelessWidget {
   Widget build(BuildContext context) {
     final outline = Theme.of(context).colorScheme.outline;
     final (text, color) = switch (line) {
-      ResultLine(isRegistered: false) => ('등록하지 않은 약 · 눌러서 바꾸기', reviewColor),
+      ResultLine(isRegistered: false) => ('처음 기록하는 약 · 저장하면 약 목록에 추가', outline),
       ResultLine(status: MatchStatus.ok) => (
         '✓ 예정대로',
         Theme.of(context).colorScheme.primary,
@@ -182,6 +174,67 @@ class _LineStatus extends StatelessWidget {
               style: TextStyle(color: reviewColor),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// 고를 약을 이름으로 찾는 시트. 등록한 약이 먼저 나온다.
+class _ChoiceSearchSheet extends StatefulWidget {
+  const _ChoiceSearchSheet({required this.title, required this.choices});
+
+  final String title;
+  final List<PillChoice> choices;
+
+  @override
+  State<_ChoiceSearchSheet> createState() => _ChoiceSearchSheetState();
+}
+
+class _ChoiceSearchSheetState extends State<_ChoiceSearchSheet> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final matches = [
+      for (final c in widget.choices)
+        if (c.name.toLowerCase().contains(_query.toLowerCase())) c,
+    ];
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.75,
+        child: Column(
+          children: [
+            Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  hintText: '약 이름 검색',
+                ),
+                onChanged: (value) => setState(() => _query = value.trim()),
+              ),
+            ),
+            Expanded(
+              child: matches.isEmpty
+                  ? const Center(child: Text('찾는 약이 없습니다'))
+                  : ListView(
+                      children: [
+                        for (final c in matches)
+                          ListTile(
+                            title: Text(c.name),
+                            subtitle: c.medication == null
+                                ? null
+                                : Text(
+                                    '등록한 약 · 1회 ${c.medication!.dosePerTake}정',
+                                  ),
+                            onTap: () => Navigator.pop(context, c),
+                          ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -250,11 +303,12 @@ class _PhotoWithBoxesState extends State<_PhotoWithBoxes> {
 }
 
 class _BoxPainter extends CustomPainter {
+  // 웹은 한글 글꼴을 필요할 때 받는다. 받은 뒤 다시 그리지 않으면 약 이름 일부가 □로 남는다.
   _BoxPainter({
     required this.detections,
     required this.photoSize,
     required this.color,
-  });
+  }) : super(repaint: PaintingBinding.instance.systemFonts);
 
   final List<Detection> detections;
   final Size photoSize;
