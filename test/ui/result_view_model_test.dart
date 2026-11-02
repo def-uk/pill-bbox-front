@@ -4,8 +4,8 @@ import 'package:pillbbox/data/repositories/intake_repository.dart';
 import 'package:pillbbox/data/repositories/medication_repository.dart';
 import 'package:pillbbox/data/services/database_service.dart';
 import 'package:pillbbox/data/services/fake_pill_detector.dart';
-import 'package:pillbbox/ui/capture/capture_view_model.dart';
 import 'package:pillbbox/ui/result/result_view_model.dart';
+import 'package:pillbbox/ui/upload/upload_view_model.dart';
 import 'package:pillbbox/utils/intake_matcher.dart';
 
 import '../helpers.dart';
@@ -28,7 +28,7 @@ void main() {
 
   Future<ResultViewModel> detect() async {
     final photo = (await rootBundle.load(
-      CaptureViewModel.samplePhotoAsset,
+      UploadViewModel.samplePhotoAsset,
     )).buffer.asUint8List();
     final vm = ResultViewModel(
       photo: photo,

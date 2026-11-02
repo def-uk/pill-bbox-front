@@ -41,7 +41,7 @@ class HistoryDayScreen extends StatelessWidget {
                 title: Text(entry.name),
                 subtitle: Text(
                   '${formatTime(entry.record.takenAt)} · '
-                  '${entry.record.source == IntakeSource.camera ? '촬영' : '직접 기록'}',
+                  '${entry.record.source == IntakeSource.camera ? '사진' : '직접 기록'}',
                 ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,

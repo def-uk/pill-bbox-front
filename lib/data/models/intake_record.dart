@@ -1,3 +1,4 @@
+/// camera는 사진으로 남긴 기록이다. DB에 이름으로 저장하므로 이름을 바꾸지 않는다.
 enum IntakeSource { camera, manual }
 
 class IntakeRecord {

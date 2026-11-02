@@ -7,7 +7,7 @@ import 'package:pillbbox/main.dart';
 import 'helpers.dart';
 
 void main() {
-  testWidgets('약을 등록하면 홈에 예정이 보이고, 촬영해 저장하면 완료로 바뀐다', (tester) async {
+  testWidgets('약을 등록하면 홈에 예정이 보이고, 사진을 올려 저장하면 완료로 바뀐다', (tester) async {
     // 메모리 DB라 닫지 않는다. 위젯 테스트에서 닫으면 sqflite가 끝나지 않는다.
     final db = createTestDatabase();
     // 휴대폰 화면 크기 (360×800).
@@ -20,7 +20,7 @@ void main() {
       PillboxApp(
         database: db,
         photos: FakePhotoStorageService(),
-        camera: NoCameraService(),
+        picker: NoPhotoPickerService(),
         detector: FakePillDetector(delay: Duration.zero),
         labels: PillLabelService(),
       ),
@@ -47,10 +47,10 @@ void main() {
     expect(find.text('샘플약 A (흰색 원형)'), findsOneWidget);
     expect(find.text('1회 2정'), findsOneWidget);
 
-    // 촬영 → 결과 확인: A는 예정대로, B·C는 등록하지 않은 약
-    await tester.tap(find.text('촬영'));
-    await pumpUntilFound(tester, find.text('샘플 사진으로 계속'));
-    await tester.tap(find.text('샘플 사진으로 계속'));
+    // 사진 올리기 → 결과 확인: A는 예정대로, B·C는 등록하지 않은 약
+    await tester.tap(find.text('사진 올리기'));
+    await pumpUntilFound(tester, find.text('샘플 사진으로 해 보기'));
+    await tester.tap(find.text('샘플 사진으로 해 보기'));
     await pumpUntilFound(tester, find.text('인식된 약'));
     expect(find.text('✓ 예정대로', findRichText: true), findsOneWidget);
     expect(

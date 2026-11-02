@@ -4,8 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../utils/time_format.dart';
-import 'capture/capture_screen.dart';
-import 'capture/capture_view_model.dart';
 import 'history/history_day_screen.dart';
 import 'history/history_day_view_model.dart';
 import 'history/history_screen.dart';
@@ -18,6 +16,8 @@ import 'medication/medication_list_screen.dart';
 import 'medication/medication_list_view_model.dart';
 import 'result/result_screen.dart';
 import 'result/result_view_model.dart';
+import 'upload/upload_screen.dart';
+import 'upload/upload_view_model.dart';
 
 GoRouter buildRouter() => GoRouter(
   routes: [
@@ -31,10 +31,10 @@ GoRouter buildRouter() => GoRouter(
       ),
     ),
     GoRoute(
-      path: '/capture',
+      path: '/upload',
       builder: (context, state) => ChangeNotifierProvider(
-        create: (context) => CaptureViewModel(camera: context.read())..open(),
-        child: const CaptureScreen(),
+        create: (context) => UploadViewModel(picker: context.read()),
+        child: const UploadScreen(),
       ),
     ),
     GoRoute(

@@ -125,8 +125,8 @@ class ResultScreen extends StatelessWidget {
                 child: OutlinedButton(
                   onPressed: vm.status == ResultStatus.saving
                       ? null
-                      : () => context.pushReplacement('/capture'),
-                  child: const Text('다시 찍기'),
+                      : () => context.pushReplacement('/upload'),
+                  child: const Text('다른 사진'),
                 ),
               ),
               const SizedBox(width: 12),
