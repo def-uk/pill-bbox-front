@@ -36,7 +36,7 @@ fvm flutter analyze
 MVVM입니다 (View, ViewModel, Repository, Service).
 
 - `lib/ui/` 화면별 View와 ViewModel, `router.dart`(go_router)
-- `lib/data/models/` 모델, `lib/data/repositories/` 저장소, `lib/data/services/` 탐지·카메라·DB(sqflite) 등 서비스
+- `lib/data/models/` 모델, `lib/data/repositories/` 저장소, `lib/data/services/` 탐지·사진 선택(image_picker)·DB(sqflite) 등 서비스
 - `lib/utils/` 공용 함수
 
-탐지 모델은 `scripts/fetch_model.sh`로 `assets/models/`에 받습니다(Git 제외). 받으면 앱은 `YoloPillDetector`(`ultralytics_yolo`), 웹은 `OnnxPillDetector`(`web/pill_detector.js`, onnxruntime-web), 받지 않으면 `FakePillDetector`가 쓰입니다. 플랫폼별 서비스는 `platform_services.dart` / `platform_services_web.dart`에서 조건부 import로 고릅니다. 지금 버전은 연동 확인용 `standin-yolo26n`(COCO 80종)입니다.
+탐지 모델은 `scripts/fetch_model.sh`로 `assets/models/`에 받습니다(Git 제외). 받으면 앱은 `YoloPillDetector`(`ultralytics_yolo`), 웹은 `OnnxPillDetector`(`web/pill_detector.js`, onnxruntime-web), 받지 않으면 `FakePillDetector`가 쓰입니다. 플랫폼별 서비스는 `platform_services.dart` / `platform_services_web.dart`에서 조건부 import로 고릅니다. 지금 버전은 `combofix-v1-fold1`(`yolo11m`, 약 96종)입니다.

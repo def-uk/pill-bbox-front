@@ -16,22 +16,22 @@
 | 구분 | 기능 |
 |---|---|
 | MVP | 복용 일정 등록(약, 시간, 1회 수량) |
-| MVP | 촬영 → 탐지 결과 확인·수정 → 복용 기록 저장 |
+| MVP | 사진 올리기 → 탐지 결과 확인·수정 → 복용 기록 저장 |
 | MVP | 오늘 복용 현황(예정 vs 복용), 날짜별 기록 조회 |
 | 2차 | 복용 시간 알림(로컬 알림) |
-| 2차 | 갤러리 사진으로 기록 |
+| 2차 | 앱 안에서 바로 촬영 (지금은 갤러리·파일에서 사진을 고름) |
 | 하지 않음 | 회원가입·로그인, 서버 저장·기기 간 동기화, 처방전 OCR |
 
 같은 Flutter 코드로 웹과 앱(Android, iOS)을 만듭니다. 스토어 심사·서명 없이 링크로 바로 열 수 있도록 **웹을 먼저 배포**하고(6장), 앱 배포는 뒤로 미룹니다.
 
 ## 3. 모델 연동
 
-### 3.1 모델 현황 (2026-10-29 기준)
+### 3.1 모델 현황 (2026-11-02 기준)
 
 | 항목 | 내용 | 앱에 주는 영향 |
 |---|---|---|
-| 모델 | ultralytics YOLO. 후보 `yolo11m`, `yolo26m` (미확정) | export 형식과 크기가 확정되면 앱에 넣음 |
-| 클래스 | 약 56종. `class_map.csv`에 `yolo_idx → category_id → dl_name` | 56종 밖의 약은 인식 못 함 → 사용자가 직접 고르는 화면 필요 |
+| 모델 | ultralytics `yolo11m`. 지금 앱에 넣은 것은 `combofix-v1-fold1` (대회 + AI Hub 조합 데이터, fold 1) | 형식마다 약 65~77MB |
+| 클래스 | 약 96종(대회 56종 + AI Hub 40종). `aihub_class_map.csv`에 `yolo_idx → category_id → dl_name` | 96종 밖의 약은 인식 못 함 → 사용자가 직접 고르는 화면 필요 |
 | 입력 | 640 × 640 (letterbox) | 플러그인이 전처리 |
 | 주 지표 | mAP75-95 (박스가 꼭 맞는지) | 앱은 박스 정밀도보다 **약 종류·개수**가 중요 |
 | 학습 데이터 | 대회 데이터 232장. 정해진 배경·조명·각도에서 찍은 사진 | 휴대폰 사진에서 성능이 떨어질 수 있음 (3.5) |
@@ -91,7 +91,8 @@ class_map.csv ─ 변환 ─▶ labels.json         ─┘
 4. 이 저장소에서 `scripts/fetch_model.sh <태그>`로 받아 `assets/models/`에 둡니다. 모델 파일은 크기가 커서 Git에 올리지 않고, 쓰는 태그만 `assets/models/VERSION`에 적어 커밋합니다. 태그 없이 실행하면 `VERSION`의 태그를 받습니다.
    - 파일은 `pillbox-<태그>.tflite`처럼 태그를 넣은 이름으로 둡니다. 플러그인이 모델을 기기에 파일 이름으로 캐시하므로, 이름이 같으면 앱을 업데이트해도 예전 모델이 계속 쓰입니다.
    - 모델을 받지 않았으면 앱은 `FakePillDetector`로 돕니다.
-   - 모델 확정 전에는 `standin-yolo26n`(공식 YOLO26n, COCO 80종)으로 연동을 확인합니다. 약이 아니라 사람·버스 같은 물체를 찾습니다. 웹용 ONNX는 공식 가중치를 받아 내보내므로 [uv](https://docs.astral.sh/uv/)가 있어야 합니다.
+   - `standin-yolo26n`(공식 YOLO26n, COCO 80종)은 모델 확정 전 연동 확인용입니다. 약이 아니라 사람·버스 같은 물체를 찾습니다. 웹용 ONNX는 공식 가중치를 받아 내보내므로 [uv](https://docs.astral.sh/uv/)가 있어야 합니다.
+   - export는 `ultralytics` 8.4.198 기준으로, Core ML은 `torch==2.7.1`·`coremltools`, LiteRT는 `litert-torch`·`ai-edge-litert`를 미리 함께 설치해야 됩니다(실행 중 자동 설치되면 torch 버전이 어긋나 실패).
 
 ### 3.4 앱 쪽 인터페이스
 
@@ -124,16 +125,16 @@ class Detection {
 | 상황 | 대응 |
 |---|---|
 | 신뢰도 낮은 결과 | 신뢰도 0.5 미만은 "확인 필요"로 표시. 0.5는 모델 저장소의 평가 기준(`POINT_CONF`)과 같음 |
-| 56종 밖의 약, 못 찾은 약 | 결과 화면에서 "약 추가"로 등록된 약 중에서 직접 고름 |
+| 96종 밖의 약, 못 찾은 약 | 결과 화면에서 "약 추가"로 등록된 약 중에서 직접 고름 |
 | 다른 약으로 인식 | 박스를 눌러 약을 바꿈. 닮은 약 3쌍(EDA 8.2)은 특히 자주 틀릴 수 있음 |
-| 휴대폰 사진과 학습 사진의 차이 | 촬영 화면에 가이드(단색 배경, 위에서 수직, 알약끼리 떨어지게) 표시 |
+| 휴대폰 사진과 학습 사진의 차이 | 사진 올리기 화면에 가이드(단색 배경, 위에서 수직, 알약끼리 떨어지게) 표시 |
 
 > 모델 저장소의 제출용 기본 신뢰도 0.001은 mAP 채점용입니다. 앱에서는 쓰지 않습니다.
 
 ## 4. 화면
 
 ```text
-홈(오늘) ──촬영──▶ 촬영 ──▶ 결과 확인 ──저장──▶ 홈(오늘)
+홈(오늘) ──사진 올리기──▶ 사진 올리기 ──▶ 결과 확인 ──저장──▶ 홈(오늘)
    │
    ├─▶ 기록 (날짜별)
    └─▶ 약 관리 ──▶ 약 등록·수정 (약, 복용 시간, 1회 수량)
@@ -141,11 +142,11 @@ class Detection {
 
 | 화면 | 내용 |
 |---|---|
-| 홈(오늘) | 시간대별 복용 예정 약과 완료 여부. 촬영 버튼 |
-| 촬영 | 카메라 미리보기, 촬영 가이드 |
+| 홈(오늘) | 시간대별 복용 예정 약과 완료 여부. 사진 올리기 버튼 |
+| 사진 올리기 | 갤러리(웹은 파일 선택 창)에서 사진 고르기, 사진 가이드, 샘플 사진 |
 | 결과 확인 | 사진 위 박스와 약 이름. 예정과 비교한 결과(예: "A 1정 ✓, B 2정 중 1정 인식"). 수정 후 저장 |
 | 기록 | 달력 또는 날짜 목록. 날짜를 누르면 그날의 복용 기록 |
-| 약 관리 | 등록한 약 목록. 약은 `labels.json`의 56종에서 검색해 고름 |
+| 약 관리 | 등록한 약 목록. 약은 `labels.json`의 96종에서 검색해 고름 |
 
 결과 확인 화면의 **예정과 비교**가 이 앱의 핵심입니다. 지금 시간대에 먹을 약 목록과 인식된 약·개수를 맞춰 보여 주므로, 사용자는 빠진 약을 바로 알 수 있습니다.
 
@@ -155,7 +156,7 @@ class Detection {
 
 ```text
 View (Widget) ──▶ ViewModel (ChangeNotifier) ──▶ Repository ──▶ Service
-   화면 그리기          화면 상태, 사용자 동작         데이터의 단일 출처     DB, 모델, 카메라
+   화면 그리기          화면 상태, 사용자 동작         데이터의 단일 출처     DB, 모델, 사진 선택
 ```
 
 - **View**: 화면을 그리고 사용자 입력을 ViewModel에 넘깁니다. 로직을 두지 않습니다.
@@ -180,7 +181,7 @@ lib/
 │                             # platform_services(_web).dart: 플랫폼별 DB·사진 저장소·탐지기
 ├── ui/
 │   ├── home/                 # home_screen.dart, home_view_model.dart
-│   ├── capture/
+│   ├── upload/
 │   ├── result/
 │   ├── history/
 │   ├── medication/
@@ -196,9 +197,9 @@ web/pill_detector.js          # 웹 탐지 (onnxruntime-web)
 
 | 테이블 | 열 |
 |---|---|
-| `medications` | `id`, `category_id`(56종 중 하나, 직접 등록한 약은 null), `name`, `dose_per_take` |
+| `medications` | `id`, `category_id`(96종 중 하나, 직접 등록한 약은 null), `name`, `dose_per_take` |
 | `schedules` | `id`, `medication_id`, `time`(HH:mm) |
-| `intake_records` | `id`, `medication_id`, `taken_at`, `count`, `source`(camera/manual), `photo_path` |
+| `intake_records` | `id`, `medication_id`, `taken_at`, `count`, `source`(camera/manual, camera는 사진으로 남긴 기록), `photo_path` |
 
 사진은 앱 전용 폴더(웹은 브라우저 안 별도 DB)에만 저장하고, 기록을 지우면 함께 지웁니다.
 
@@ -210,7 +211,7 @@ web/pill_detector.js          # 웹 탐지 (onnxruntime-web)
 |---|---|
 | 상태관리 | `provider` |
 | 탐지 | `ultralytics_yolo`(앱), onnxruntime-web(웹, CDN에서 `<script>`로 읽음) |
-| 카메라 | `camera` (갤러리는 2차에 `image_picker`) |
+| 사진 선택 | `image_picker` (긴 변 1920px, JPEG로 줄여 저장) |
 | DB | `sqflite`(앱), `sqflite_common_ffi_web`(웹) |
 | 화면 이동 | `go_router` |
 | 알림 (2차) | `flutter_local_notifications` |
@@ -250,20 +251,20 @@ fvm dart run sqflite_common_ffi_web:setup
 fvm flutter run -d chrome
 ```
 
-- 카메라는 HTTPS나 `localhost`에서만 열립니다. 카메라가 없으면 샘플 사진으로 흐름을 확인합니다.
+- 휴대폰 브라우저의 파일 선택 창에서 사진 보관함이나 카메라를 고를 수 있습니다. 사진이 없으면 샘플 사진으로 흐름을 확인합니다.
 - 모델을 바꾼 배포는 PR에 모델 태그(`assets/models/VERSION`)를 적습니다. 빌드에는 그때 `VERSION`에 적힌 모델이 들어갑니다.
 
 ## 7. 개발 순서
 
 | 순서 | 할 일 | 끝난 기준 |
 |---|---|---|
-| 1 | Flutter 프로젝트 생성, MVVM 뼈대, `FakePillDetector` | 가짜 결과로 촬영 → 결과 확인 → 저장 흐름이 돎 |
+| 1 | Flutter 프로젝트 생성, MVVM 뼈대, `FakePillDetector` | 가짜 결과로 사진 → 결과 확인 → 저장 흐름이 돎 |
 | 2 | 약 관리, 일정, 기록, 홈(오늘) | 일정 등록 후 홈에 예정·완료가 보임 |
 | 3 | 모델 export, `YoloPillDetector` | 실제 기기에서 테스트 사진 10장의 결과가 모델 저장소 예측과 같음 |
 | 4 | 휴대폰 사진으로 성능 확인 | 실제로 찍은 사진 20장 이상의 인식 결과 정리, 모델 팀과 공유 |
-| 5 | 웹 배포 (GitHub Pages) | 팀원이 휴대폰 브라우저에서 링크로 열어 촬영·기록 |
+| 5 | 웹 배포 (GitHub Pages) | 팀원이 휴대폰 브라우저에서 링크로 열어 사진을 올려 기록 |
 | 5-1 (나중) | 앱 스토어 테스트 배포 (fastlane `beta`) | 팀원이 TestFlight / 내부 테스트로 설치 |
-| 6 (2차) | 알림, 갤러리 입력 | |
+| 6 (2차) | 알림, 앱 안 촬영 | |
 
 ## 8. 결정할 것
 
@@ -272,5 +273,5 @@ fvm flutter run -d chrome
 | 지원 플랫폼 | 웹 먼저. 앱(Android, iOS)은 스토어 배포가 필요해질 때 | 팀 |
 | 최종 모델과 크기 | 모델 팀 결정. 기기 속도를 위해 s/n 크기 export도 함께 받아 비교 | 모델 팀 |
 | 알림을 MVP에 넣을지 | 2차 | 팀 |
-| 직접 등록한 약(56종 밖) 허용 | 허용하되 촬영 인식은 안 됨, 수동 기록만 | 팀 |
+| 직접 등록한 약(96종 밖) 허용 | 허용하되 사진 인식은 안 됨, 수동 기록만 | 팀 |
 | 탐지 플러그인 라이선스 | `ultralytics_yolo`와 모델이 AGPL-3.0. 웹은 모델 파일을 그대로 내려받게 하므로 공개 배포 전에 소스 공개 또는 Enterprise License | 팀 |
