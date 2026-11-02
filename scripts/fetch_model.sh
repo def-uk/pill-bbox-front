@@ -57,15 +57,17 @@ else
     -p pillbox.tflite -p pillbox.mlpackage.zip -p pillbox.onnx -p labels.json
 fi
 
-# 이전 버전 파일을 지우고 새 버전으로 바꾼다.
-find "$dir" -maxdepth 1 -name 'pillbox-*' -delete
-mv "$tmp/pillbox.tflite" "$dir/pillbox-$version.tflite"
-mv "$tmp/pillbox.mlpackage.zip" "$dir/pillbox-$version.mlpackage.zip"
+# 이전 버전 파일을 지우고 새 버전으로 바꾼다. 모델은 플랫폼별 폴더에 둬 그 플랫폼 빌드에만 들어가게 한다
+# (pubspec.yaml).
+find "$dir" -maxdepth 2 -name 'pillbox-*' -delete
+mkdir -p "$dir/android" "$dir/ios" "$dir/web"
+mv "$tmp/pillbox.tflite" "$dir/android/pillbox-$version.tflite"
+mv "$tmp/pillbox.mlpackage.zip" "$dir/ios/pillbox-$version.mlpackage.zip"
 mv "$tmp/labels.json" "$dir/pillbox-$version.labels.json"
 if [[ -f $tmp/pillbox.onnx ]]; then
-  mv "$tmp/pillbox.onnx" "$dir/pillbox-$version.onnx"
+  mv "$tmp/pillbox.onnx" "$dir/web/pillbox-$version.onnx"
 else
   echo "pillbox.onnx가 없어 웹은 FakePillDetector로 돕니다." >&2
 fi
 echo "$version" > "$dir/VERSION"
-ls -lh "$dir"
+ls -lhR "$dir"

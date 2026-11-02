@@ -36,26 +36,26 @@ void main() {
     final bundle = FakeAssetBundle({
       ...version,
       ...labels,
-      'assets/models/pillbox-model-v1.tflite': '',
-      'assets/models/pillbox-model-v1.mlpackage.zip': '',
-      'assets/models/pillbox-model-v1.onnx': '',
+      'assets/models/android/pillbox-model-v1.tflite': '',
+      'assets/models/ios/pillbox-model-v1.mlpackage.zip': '',
+      'assets/models/web/pillbox-model-v1.onnx': '',
     });
 
-    final android = await ModelBundle.find(bundle, extension: 'tflite');
+    final android = await ModelBundle.find(bundle, format: ModelFormat.tflite);
     expect(android?.version, 'model-v1');
-    expect(android?.modelAsset, 'assets/models/pillbox-model-v1.tflite');
+    expect(android?.modelAsset, 'assets/models/android/pillbox-model-v1.tflite');
     expect(android?.labelsAsset, 'assets/models/pillbox-model-v1.labels.json');
 
-    final ios = await ModelBundle.find(bundle, extension: 'mlpackage.zip');
-    expect(ios?.modelAsset, 'assets/models/pillbox-model-v1.mlpackage.zip');
+    final ios = await ModelBundle.find(bundle, format: ModelFormat.coreml);
+    expect(ios?.modelAsset, 'assets/models/ios/pillbox-model-v1.mlpackage.zip');
 
-    final web = await ModelBundle.find(bundle, extension: 'onnx');
-    expect(web?.modelAsset, 'assets/models/pillbox-model-v1.onnx');
+    final web = await ModelBundle.find(bundle, format: ModelFormat.onnx);
+    expect(web?.modelAsset, 'assets/models/web/pillbox-model-v1.onnx');
   });
 
   test('모델을 받지 않았거나 다른 버전이면 null', () async {
     expect(
-      await ModelBundle.find(FakeAssetBundle(version), extension: 'tflite'),
+      await ModelBundle.find(FakeAssetBundle(version), format: ModelFormat.tflite),
       isNull,
     );
     expect(
@@ -63,12 +63,12 @@ void main() {
         FakeAssetBundle({
           ...version,
           ...labels,
-          'assets/models/pillbox-model-v0.tflite': '',
+          'assets/models/android/pillbox-model-v0.tflite': '',
         }),
-        extension: 'tflite',
+        format: ModelFormat.tflite,
       ),
       isNull,
     );
-    expect(await ModelBundle.find(FakeAssetBundle({}), extension: 'tflite'), isNull);
+    expect(await ModelBundle.find(FakeAssetBundle({}), format: ModelFormat.tflite), isNull);
   });
 }

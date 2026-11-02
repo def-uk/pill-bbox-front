@@ -33,3 +33,10 @@ flutter:
     - assets/images/test_images/
     - assets/labels/
     - assets/models/
+    # 플랫폼마다 자기 모델만 넣는다 (lib/data/services/model_bundle.dart의 ModelFormat).
+    - path: assets/models/android/
+      platforms: [android]
+    - path: assets/models/ios/
+      platforms: [ios]
+    - path: assets/models/web/
+      platforms: [web]

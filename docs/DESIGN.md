@@ -72,10 +72,12 @@ class_map.csv ─ 변환 ─▶ labels.json         ─┘
    from ultralytics import YOLO
 
    model = YOLO("best.pt")
-   model.export(format="litert", nms=None, imgsz=640)    # Android → pillbox.tflite
-   model.export(format="coreml", nms=False, imgsz=640)   # iOS → .mlpackage를 zip으로 묶어 pillbox.mlpackage.zip
-   model.export(format="onnx", imgsz=640)                # 웹 → pillbox.onnx
+   model.export(format="litert", nms=None, imgsz=640, quantize="w8a32")   # Android → pillbox.tflite
+   model.export(format="coreml", nms=False, imgsz=640, quantize="w8a16")  # iOS → .mlpackage를 zip으로 묶어 pillbox.mlpackage.zip
+   model.export(format="onnx", imgsz=640)                                 # 웹 → scripts/quantize_onnx.py로 줄여 pillbox.onnx
    ```
+
+   가중치를 int8로 저장해 파일마다 약 80MB에서 20MB로 줄입니다. 계산은 그대로라 대회 학습 사진 232장에서 탐지 결과가 원래 모델과 같았습니다(신뢰도 차이 최대 0.04). 웹은 onnxruntime-web의 wasm이 int8 계산을 잘 받지 못해, Conv 가중치만 int8로 저장하고 불러올 때 fp32로 되돌리는 `scripts/quantize_onnx.py`를 씁니다.
 
    인자는 `ultralytics_yolo` 0.7.1 문서(공식 YOLO26 모델과 같은 설정, `ultralytics>=8.4.142`)를 따릅니다. iOS는 Flutter 에셋에서 `.mlpackage.zip`만 읽으므로 zip으로 묶습니다.
    웹은 ONNX 출력이 NMS 전(`[1, 4+클래스 수, 8400]`)이든 YOLO26 end2end(`[1, 300, 6]`)든 읽습니다. 입력은 640 고정입니다.
@@ -87,7 +89,7 @@ class_map.csv ─ 변환 ─▶ labels.json         ─┘
    ```
 
 3. 네 파일을 모델 저장소의 GitHub Release(`model-v1` 같은 태그)에 올립니다.
-4. 이 저장소에서 `scripts/fetch_model.sh <태그>`로 받아 `assets/models/`에 둡니다. 모델 파일은 크기가 커서 Git에 올리지 않고, 쓰는 태그만 `assets/models/VERSION`에 적어 커밋합니다. 태그 없이 실행하면 `VERSION`의 태그를 받습니다.
+4. 이 저장소에서 `scripts/fetch_model.sh <태그>`로 받아 `assets/models/`에 둡니다. 모델은 `android/`, `ios/`, `web/` 폴더에 나눠 두고 `pubspec.yaml`의 `platforms`로 그 플랫폼 빌드에만 넣습니다. 모델 파일은 크기가 커서 Git에 올리지 않고, 쓰는 태그만 `assets/models/VERSION`에 적어 커밋합니다. 태그 없이 실행하면 `VERSION`의 태그를 받습니다.
    - 파일은 `pillbox-<태그>.tflite`처럼 태그를 넣은 이름으로 둡니다. 플러그인이 모델을 기기에 파일 이름으로 캐시하므로, 이름이 같으면 앱을 업데이트해도 예전 모델이 계속 쓰입니다.
    - 모델을 받지 않았으면 앱은 `FakePillDetector`로 돕니다.
    - `standin-yolo26n`(공식 YOLO26n, COCO 80종)은 모델 확정 전 연동 확인용입니다. 약이 아니라 사람·버스 같은 물체를 찾습니다. 웹용 ONNX는 공식 가중치를 받아 내보내므로 [uv](https://docs.astral.sh/uv/)가 있어야 합니다.
@@ -198,7 +200,7 @@ lib/
 │   ├── medication/
 │   └── common/               # 공통 위젯, 테마
 └── utils/                    # intake_matcher.dart
-assets/models/                # pillbox-<태그>.tflite / .mlpackage.zip / .onnx / .labels.json (Git 제외), VERSION
+assets/models/                # android/·ios/·web/pillbox-<태그>.tflite / .mlpackage.zip / .onnx, pillbox-<태그>.labels.json (Git 제외), VERSION
 web/pill_detector.js          # 웹 탐지 (onnxruntime-web)
 ```
 
