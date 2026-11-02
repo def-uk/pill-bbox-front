@@ -8,6 +8,7 @@ import '../../data/models/medication.dart';
 import '../../data/models/pill_label.dart';
 import '../../data/repositories/intake_repository.dart';
 import '../../data/repositories/medication_repository.dart';
+import '../../data/services/detection_mapper.dart';
 import '../../data/services/pill_detector.dart';
 import '../../data/services/pill_label_service.dart';
 import '../../utils/intake_matcher.dart';
@@ -132,6 +133,25 @@ class ResultViewModel extends ChangeNotifier {
   /// 물체에 고른 약과 그 물체의 색·모양. 저장할 때 남겨 다음 사진에서 추천한다.
   final _picked = <(_Target, Appearance)>[];
 
+  /// 줄마다 모델이 헷갈린 다른 약 (Detection.alternatives).
+  final _alternatives = <_Target, List<Detection>>{};
+
+  /// 약 바꾸기에서 맨 위에 둘, 모델이 [line]과 헷갈린 약.
+  List<PillChoice> alternativesOf(ResultLine line) {
+    final byCategory = {
+      for (final m in medications)
+        if (m.categoryId != null) m.categoryId!: m,
+    };
+    return [
+      for (final d in _alternatives[_targetOfLine(line)] ?? const <Detection>[])
+        if (d.categoryId != line.categoryId)
+          if (byCategory[d.categoryId] case final m?)
+            PillChoice(medication: m, categoryId: m.categoryId, name: m.name)
+          else
+            PillChoice(categoryId: d.categoryId, name: d.name),
+    ];
+  }
+
   /// 약 바꾸기·약 추가에서 고를 수 있는 약. 등록한 약 먼저.
   List<PillChoice> get choices {
     final registered = {for (final m in medications) m.categoryId};
@@ -176,7 +196,7 @@ class ResultViewModel extends ChangeNotifier {
       _due = dueNow(summarizeDay(medications, records), now);
 
       await _detector.load();
-      detections = await _detector.detect(photo);
+      detections = mergeOverlaps(await _detector.detect(photo));
       _arrange(detections);
       unknowns = await _unknownObjects();
       status = ResultStatus.ready;
@@ -262,6 +282,14 @@ class ResultViewModel extends ChangeNotifier {
     }
     for (final group in groups.values) {
       final medication = byCategory[group.first.categoryId];
+      final alternatives = [for (final d in group) ...d.alternatives];
+      if (alternatives.isNotEmpty) {
+        _alternatives[(
+              medicationId: medication?.id,
+              key: medication == null ? group.first.categoryId : null,
+            )] =
+            alternatives;
+      }
       if (medication == null) {
         _unregistered[group.first.categoryId] = ResultLine(
           medication: null,

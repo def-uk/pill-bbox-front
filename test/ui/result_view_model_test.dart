@@ -184,6 +184,32 @@ void main() {
     expect(vm.canSave, isFalse);
   });
 
+  test('알약 하나에 두 약이 겹쳐 잡히면 1정으로 세고, 헷갈린 약을 바꿀 후보로 둔다', () async {
+    const box = Rect.fromLTRB(100, 100, 200, 200);
+    final vm = await detect(
+      detector: _FixedDetector(const [
+        Detection(
+          categoryId: 9001,
+          name: '샘플약 A (흰색)',
+          confidence: 0.8,
+          box: box,
+        ),
+        Detection(
+          categoryId: 9002,
+          name: '샘플약 B (노란색 타원형)',
+          confidence: 0.6,
+          box: Rect.fromLTRB(102, 101, 203, 199),
+        ),
+      ]),
+    );
+
+    expect([for (final l in vm.lines) (l.name, l.count)], [('샘플약 A (흰색)', 1)]);
+    expect(
+      [for (final c in vm.alternativesOf(vm.lines.single)) c.name],
+      ['샘플약 B (노란색 타원형)'],
+    );
+  });
+
   group('알 수 없는 물체', () {
     const yellow = Appearance(l: 70, a: 5, b: 45, elongation: 2.1);
     const purple = Appearance(l: 40, a: 30, b: -30, elongation: 1);
@@ -322,4 +348,16 @@ class _NoPillDetector implements PillDetector {
 
   @override
   Future<List<Detection>> detect(Uint8List imageBytes) async => const [];
+}
+
+class _FixedDetector implements PillDetector {
+  _FixedDetector(this.results);
+
+  final List<Detection> results;
+
+  @override
+  Future<void> load() async {}
+
+  @override
+  Future<List<Detection>> detect(Uint8List imageBytes) async => results;
 }

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../data/models/medication.dart';
 import '../../utils/intake_matcher.dart';
 import '../common/theme.dart';
 import 'result_view_model.dart';
@@ -25,28 +24,45 @@ class ResultScreen extends StatelessWidget {
       }
     }
 
-    Future<PillChoice?> pick(String title, {Medication? suggested}) =>
-        showModalBottomSheet<PillChoice>(
-          context: context,
-          isScrollControlled: true,
-          showDragHandle: true,
-          builder: (_) => _ChoiceSearchSheet(
-            title: title,
-            choices: vm.choices,
-            suggested: suggested,
-          ),
-        );
+    Future<PillChoice?> pick(
+      String title, {
+      List<PillChoice> suggestions = const [],
+      String suggestionNote = '',
+    }) => showModalBottomSheet<PillChoice>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _ChoiceSearchSheet(
+        title: title,
+        choices: vm.choices,
+        suggestions: suggestions,
+        suggestionNote: suggestionNote,
+      ),
+    );
 
     Future<void> identify(UnknownObject object) async {
+      final similar = object.suggestion;
       final choice = await pick(
         '물체 ${object.number}은(는) 어떤 약인가요?',
-        suggested: object.suggestion,
+        suggestions: [
+          if (similar != null)
+            PillChoice(
+              medication: similar,
+              categoryId: similar.categoryId,
+              name: similar.name,
+            ),
+        ],
+        suggestionNote: '예전에 고른 약과 색·모양이 비슷해요',
       );
       if (choice != null) vm.identify(object, choice);
     }
 
     Future<void> changeMedication(ResultLine line) async {
-      final choice = await pick('${line.name}을(를) 어떤 약으로 바꿀까요?');
+      final choice = await pick(
+        '${line.name}을(를) 어떤 약으로 바꿀까요?',
+        suggestions: vm.alternativesOf(line),
+        suggestionNote: '모델이 이 약과 헷갈렸어요',
+      );
       if (choice != null) vm.changeMedication(line, choice);
     }
 
@@ -230,19 +246,21 @@ class _NoPills extends StatelessWidget {
   }
 }
 
-/// 고를 약을 이름으로 찾는 시트. 비슷한 약, 등록한 약 순서로 나오고, 없으면 이름을 직접 넣는다.
+/// 고를 약을 이름으로 찾는 시트. 추천한 약, 등록한 약 순서로 나오고, 없으면 이름을 직접 넣는다.
 class _ChoiceSearchSheet extends StatefulWidget {
   const _ChoiceSearchSheet({
     required this.title,
     required this.choices,
-    this.suggested,
+    this.suggestions = const [],
+    this.suggestionNote = '',
   });
 
   final String title;
   final List<PillChoice> choices;
 
-  /// 색·모양이 비슷한 약. 맨 위에 둔다.
-  final Medication? suggested;
+  /// 맨 위에 둘 약: 색·모양이 비슷한 약이나 모델이 헷갈린 약. 왜 추천하는지는 [suggestionNote].
+  final List<PillChoice> suggestions;
+  final String suggestionNote;
 
   @override
   State<_ChoiceSearchSheet> createState() => _ChoiceSearchSheetState();
@@ -253,11 +271,16 @@ class _ChoiceSearchSheetState extends State<_ChoiceSearchSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final suggested = widget.suggested;
+    final suggestions = _query.isEmpty ? widget.suggestions : const [];
+    bool suggested(PillChoice c) => suggestions.any(
+      (s) => s.medication != null
+          ? s.medication!.id == c.medication?.id
+          : c.medication == null && s.categoryId == c.categoryId,
+    );
     final matches = [
       for (final c in widget.choices)
         if (c.name.toLowerCase().contains(_query.toLowerCase()) &&
-            (suggested == null || c.medication?.id != suggested.id))
+            !suggested(c))
           c,
     ];
     final exact = widget.choices.any((c) => c.name == _query);
@@ -280,19 +303,12 @@ class _ChoiceSearchSheetState extends State<_ChoiceSearchSheet> {
             Expanded(
               child: ListView(
                 children: [
-                  if (suggested != null && _query.isEmpty)
+                  for (final c in suggestions)
                     ListTile(
                       leading: const Icon(Icons.auto_awesome),
-                      title: Text(suggested.name),
-                      subtitle: const Text('예전에 고른 약과 색·모양이 비슷해요'),
-                      onTap: () => Navigator.pop(
-                        context,
-                        PillChoice(
-                          medication: suggested,
-                          categoryId: suggested.categoryId,
-                          name: suggested.name,
-                        ),
-                      ),
+                      title: Text(c.name),
+                      subtitle: Text(widget.suggestionNote),
+                      onTap: () => Navigator.pop(context, c),
                     ),
                   for (final c in matches)
                     ListTile(
@@ -310,7 +326,7 @@ class _ChoiceSearchSheetState extends State<_ChoiceSearchSheet> {
                       onTap: () =>
                           Navigator.pop(context, PillChoice.custom(_query)),
                     ),
-                  if (matches.isEmpty && _query.isEmpty && suggested == null)
+                  if (matches.isEmpty && _query.isEmpty && suggestions.isEmpty)
                     const ListTile(title: Text('찾는 약이 없습니다')),
                 ],
               ),
