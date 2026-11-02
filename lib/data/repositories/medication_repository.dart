@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../../utils/time_format.dart';
+import '../models/appearance.dart';
 import '../models/medication.dart';
 import '../services/database_service.dart';
 import '../services/photo_storage_service.dart';
@@ -76,6 +77,25 @@ class MedicationRepository extends ChangeNotifier {
     });
     notifyListeners();
     return savedId;
+  }
+
+  /// 사용자가 사진 속 물체를 [medicationId] 약으로 골랐을 때 그 물체의 색·모양을 남긴다.
+  Future<void> addAppearance(int medicationId, Appearance appearance) async {
+    final db = await _db.database;
+    await db.insert('appearances', {
+      'medication_id': medicationId,
+      ...appearance.toMap(),
+    });
+  }
+
+  /// 남겨 둔 색·모양 전부. (medication_id, 색·모양)
+  Future<List<(int, Appearance)>> appearances() async {
+    final db = await _db.database;
+    final rows = await db.query('appearances');
+    return [
+      for (final row in rows)
+        (row['medication_id']! as int, Appearance.fromMap(row)),
+    ];
   }
 
   /// 약을 지운다. 일정과 복용 기록도 함께 지워지고, 더 쓰이지 않는 사진도 지운다.

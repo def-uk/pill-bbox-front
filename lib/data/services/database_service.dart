@@ -18,9 +18,10 @@ class DatabaseService {
     return _factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 1,
+        version: 2,
         onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
         onCreate: _create,
+        onUpgrade: _upgrade,
       ),
     );
   }
@@ -52,8 +53,26 @@ class DatabaseService {
       ..execute(
         'CREATE INDEX idx_intake_records_taken_at ON intake_records(taken_at)',
       );
+    _createAppearances(batch);
     await batch.commit(noResult: true);
   }
+
+  Future<void> _upgrade(Database db, int from, int to) async {
+    final batch = db.batch();
+    if (from < 2) _createAppearances(batch);
+    await batch.commit(noResult: true);
+  }
+
+  /// 버전 2. 사용자가 사진 속 물체에 고른 약의 색·모양 (비슷한 약 추천).
+  static void _createAppearances(Batch batch) => batch.execute('''
+    CREATE TABLE appearances (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      medication_id INTEGER NOT NULL REFERENCES medications(id) ON DELETE CASCADE,
+      l REAL NOT NULL,
+      a REAL NOT NULL,
+      b REAL NOT NULL,
+      elongation REAL NOT NULL
+    )''');
 
   Future<void> close() async {
     final database = _database;

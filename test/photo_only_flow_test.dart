@@ -44,7 +44,7 @@ void main() {
     await pumpUntilFound(tester, find.text('복용 기록을 저장했습니다'));
 
     await pumpUntilFound(tester, find.text('오늘 기록'));
-    expect(find.text('샘플약 A (흰색 원형)'), findsOneWidget);
+    expect(find.text('샘플약 A (흰색)'), findsOneWidget);
     expect(find.text('2정'), findsOneWidget);
   });
 }

@@ -30,6 +30,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/
+    - assets/images/test_images/
     - assets/labels/
     - assets/models/

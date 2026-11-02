@@ -33,8 +33,8 @@ void main() {
     await tester.tap(find.text('약 등록'));
     await pumpUntilFound(tester, find.text('약을 고르세요'));
     await tester.tap(find.text('약을 고르세요'));
-    await pumpUntilFound(tester, find.text('샘플약 A (흰색 원형)'));
-    await tester.tap(find.text('샘플약 A (흰색 원형)'));
+    await pumpUntilFound(tester, find.text('샘플약 A (흰색)'));
+    await tester.tap(find.text('샘플약 A (흰색)'));
     await pumpUntilFound(tester, find.text('사진으로 인식되는 약'));
     await tester.tap(find.byTooltip('1정 늘리기'));
     await tester.tap(find.text('시간 추가'));
@@ -50,7 +50,7 @@ void main() {
     // 홈: 08:00에 A 2정 예정
     await pumpUntilFound(tester, find.text('예정'));
     expect(find.text('08:00'), findsOneWidget);
-    expect(find.text('샘플약 A (흰색 원형)'), findsOneWidget);
+    expect(find.text('샘플약 A (흰색)'), findsOneWidget);
     expect(find.text('1회 2정'), findsOneWidget);
 
     // 사진 올리기 → 결과 확인: A는 예정대로, B·C는 처음 기록하는 약
