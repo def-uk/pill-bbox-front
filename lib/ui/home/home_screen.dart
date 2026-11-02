@@ -1,8 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/intake_record.dart';
+import '../../data/services/photo_picker_service.dart';
 import '../../utils/intake_matcher.dart';
 import '../../utils/time_format.dart';
 import '../common/medication_picker.dart';
@@ -24,6 +27,29 @@ class HomeScreen extends StatelessWidget {
         action: '기록',
       );
       if (ok) await vm.markTaken(slot);
+    }
+
+    void showResult(Uint8List? photo) {
+      if (photo != null && context.mounted) {
+        context.push('/result', extra: photo);
+      }
+    }
+
+    Future<void> pickPhoto(PhotoSource source) async {
+      final messenger = ScaffoldMessenger.of(context);
+      try {
+        showResult(await vm.pickPhoto(source));
+      } catch (_) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              source == PhotoSource.camera
+                  ? '카메라를 열 수 없습니다. 사진 올리기를 써 주세요.'
+                  : '사진을 열 수 없습니다',
+            ),
+          ),
+        );
+      }
     }
 
     return Scaffold(
@@ -48,14 +74,24 @@ class HomeScreen extends StatelessWidget {
         ),
         HomeViewModel(summary: DaySummary(slots: [], unscheduled: [])) =>
           _Empty(
-            message: '오늘 기록이 없습니다.\n사진을 올리면 인식한 약이 바로 기록됩니다.',
-            action: TextButton(
-              onPressed: () => context.push('/medications'),
-              child: const Text('복용 시간 정하기'),
+            message:
+                '오늘 기록이 없습니다.\n알약 사진을 찍거나 올리면 인식한 약이 바로 기록됩니다.\n\n'
+                '단색 배경 위에 알약끼리 떨어지게 놓고 바로 위에서 찍어 주세요.',
+            action: Column(
+              children: [
+                TextButton(
+                  onPressed: () async => showResult(await vm.loadSamplePhoto()),
+                  child: const Text('샘플 사진으로 해 보기'),
+                ),
+                TextButton(
+                  onPressed: () => context.push('/medications'),
+                  child: const Text('복용 시간 정하기'),
+                ),
+              ],
             ),
           ),
         _ => ListView(
-          padding: const EdgeInsets.only(bottom: 96),
+          padding: const EdgeInsets.only(bottom: 16),
           children: [
             for (final (time, slots) in vm.slotsByTime) ...[
               Padding(
@@ -96,10 +132,33 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       },
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/upload'),
-        icon: const Icon(Icons.add_photo_alternate),
-        label: const Text('사진 올리기'),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: vm.picking
+                      ? null
+                      : () => pickPhoto(PhotoSource.camera),
+                  icon: const Icon(Icons.photo_camera),
+                  label: const Text('사진 찍기'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  onPressed: vm.picking
+                      ? null
+                      : () => pickPhoto(PhotoSource.gallery),
+                  icon: const Icon(Icons.photo_library),
+                  label: const Text('사진 올리기'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

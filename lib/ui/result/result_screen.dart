@@ -117,7 +117,7 @@ class ResultScreen extends StatelessWidget {
                 child: OutlinedButton(
                   onPressed: vm.status == ResultStatus.saving
                       ? null
-                      : () => context.pushReplacement('/upload'),
+                      : () => context.pop(),
                   child: const Text('다른 사진'),
                 ),
               ),

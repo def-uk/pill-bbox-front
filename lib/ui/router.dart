@@ -16,25 +16,18 @@ import 'medication/medication_list_screen.dart';
 import 'medication/medication_list_view_model.dart';
 import 'result/result_screen.dart';
 import 'result/result_view_model.dart';
-import 'upload/upload_screen.dart';
-import 'upload/upload_view_model.dart';
 
 GoRouter buildRouter() => GoRouter(
   routes: [
     GoRoute(
       path: '/',
       builder: (context, state) => ChangeNotifierProvider(
-        create: (context) =>
-            HomeViewModel(intakes: context.read(), medications: context.read())
-              ..load(),
+        create: (context) => HomeViewModel(
+          intakes: context.read(),
+          medications: context.read(),
+          picker: context.read(),
+        )..load(),
         child: const HomeScreen(),
-      ),
-    ),
-    GoRoute(
-      path: '/upload',
-      builder: (context, state) => ChangeNotifierProvider(
-        create: (context) => UploadViewModel(picker: context.read()),
-        child: const UploadScreen(),
       ),
     ),
     GoRoute(
