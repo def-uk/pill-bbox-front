@@ -2,8 +2,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pillbbox/data/services/camera_service.dart';
 import 'package:pillbbox/data/services/database_service.dart';
+import 'package:pillbbox/data/services/photo_picker_service.dart';
 import 'package:pillbbox/data/services/photo_storage_service.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -34,10 +34,10 @@ class FakePhotoStorageService implements PhotoStorageService {
   Future<void> delete(String relativePath) async => photos.remove(relativePath);
 }
 
-/// 카메라가 없는 기기.
-class NoCameraService extends CameraService {
+/// 사진을 고르지 않고 닫는다. 위젯 테스트에서는 샘플 사진으로 흐름을 확인한다.
+class NoPhotoPickerService extends PhotoPickerService {
   @override
-  Future<bool> open() async => false;
+  Future<Uint8List?> pick() async => null;
 }
 
 /// 실제 비동기 작업(에셋 읽기 등)과 가짜 시계의 타이머를 함께 진행하며 [finder]가 나올 때까지 그린다.

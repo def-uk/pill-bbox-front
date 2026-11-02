@@ -18,9 +18,9 @@ fvm flutter run
 fvm flutter test
 ```
 
-`scripts/fetch_model.sh`는 `assets/models/VERSION`에 적힌 탐지 모델을 받습니다. 받지 않으면 고정된 결과를 돌려주는 `FakePillDetector`로 돕니다. 지금 버전은 모델 확정 전 연동 확인용 `standin-yolo26n`(공식 YOLO26n, COCO 80종)이라 약이 아닌 물체를 찾습니다.
+`scripts/fetch_model.sh`는 `assets/models/VERSION`에 적힌 탐지 모델을 받습니다. 받지 않으면 고정된 결과를 돌려주는 `FakePillDetector`로 돕니다. 지금 버전은 `combofix-v1-fold1`(`yolo11m`, 약 96종)입니다.
 
-카메라가 없는 iOS 시뮬레이터에서는 촬영 화면의 "샘플 사진으로 계속"으로 흐름을 확인합니다.
+사진은 촬영하지 않고 갤러리(웹은 파일 선택 창)에서 골라 올립니다. 사진이 없으면 사진 올리기 화면의 "샘플 사진으로 해 보기"로 흐름을 확인합니다.
 
 ## 문서
 

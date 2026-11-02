@@ -83,7 +83,7 @@ class HomeScreen extends StatelessWidget {
                 ListTile(
                   leading: Icon(
                     record.source == IntakeSource.camera
-                        ? Icons.photo_camera
+                        ? Icons.photo
                         : Icons.edit,
                   ),
                   title: Text(vm.nameOf(record.medicationId)),
@@ -95,9 +95,9 @@ class HomeScreen extends StatelessWidget {
         ),
       },
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/capture'),
-        icon: const Icon(Icons.photo_camera),
-        label: const Text('촬영'),
+        onPressed: () => context.push('/upload'),
+        icon: const Icon(Icons.add_photo_alternate),
+        label: const Text('사진 올리기'),
       ),
     );
   }

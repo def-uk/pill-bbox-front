@@ -6,10 +6,10 @@ import 'package:provider/provider.dart';
 
 import 'data/repositories/intake_repository.dart';
 import 'data/repositories/medication_repository.dart';
-import 'data/services/camera_service.dart';
 import 'data/services/database_service.dart';
 import 'data/services/fake_pill_detector.dart';
 import 'data/services/model_bundle.dart';
+import 'data/services/photo_picker_service.dart';
 import 'data/services/photo_storage_service.dart';
 import 'data/services/pill_detector.dart';
 import 'data/services/pill_label_service.dart';
@@ -29,7 +29,7 @@ Future<void> main() async {
     PillboxApp(
       database: DatabaseService(factory: platformDatabaseFactory),
       photos: createPhotoStorage(),
-      camera: CameraService(),
+      picker: PhotoPickerService(),
       detector: model == null
           ? FakePillDetector()
           : createModelDetector(model, labels),
@@ -43,14 +43,14 @@ class PillboxApp extends StatefulWidget {
     super.key,
     required this.database,
     required this.photos,
-    required this.camera,
+    required this.picker,
     required this.detector,
     required this.labels,
   });
 
   final DatabaseService database;
   final PhotoStorageService photos;
-  final CameraService camera;
+  final PhotoPickerService picker;
   final PillDetector detector;
   final PillLabelService labels;
 
@@ -72,7 +72,7 @@ class _PillboxAppState extends State<PillboxApp> {
     return MultiProvider(
       providers: [
         Provider.value(value: widget.photos),
-        Provider.value(value: widget.camera),
+        Provider.value(value: widget.picker),
         Provider.value(value: widget.detector),
         Provider.value(value: widget.labels),
         ChangeNotifierProvider(
