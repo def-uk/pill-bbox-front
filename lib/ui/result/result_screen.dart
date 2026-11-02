@@ -198,21 +198,7 @@ class _LineStatus extends StatelessWidget {
       ),
       ResultLine(status: MatchStatus.unscheduled) => ('지금 예정에 없는 약', outline),
     };
-    return Text.rich(
-      TextSpan(
-        children: [
-          TextSpan(
-            text: text,
-            style: TextStyle(color: color),
-          ),
-          if (line.needsReview)
-            const TextSpan(
-              text: ' · 확인 필요',
-              style: TextStyle(color: reviewColor),
-            ),
-        ],
-      ),
-    );
+    return Text(text, style: TextStyle(color: color));
   }
 }
 
@@ -395,7 +381,7 @@ class _PhotoWithBoxesState extends State<_PhotoWithBoxes> {
                   (
                     d.box,
                     '${d.name} ${(d.confidence * 100).round()}%',
-                    d.confidence < reviewConfidence ? reviewColor : primary,
+                    primary,
                   ),
                 for (final o in widget.vm.unknowns)
                   (o.box, '물체 ${o.number}', unknownColor),

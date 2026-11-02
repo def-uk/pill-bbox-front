@@ -54,7 +54,7 @@ void main() {
     return vm;
   }
 
-  /// 샘플 사진의 인식 결과: A 2정, B 1정, C 1정(신뢰도 0.42).
+  /// 샘플 사진의 인식 결과: A 2정, B 1정, C 1정.
   Future<void> register() async {
     await medications.save(
       categoryId: 9001,
@@ -90,20 +90,13 @@ void main() {
     expect(
       [
         for (final l in vm.lines)
-          (
-            l.name,
-            l.count,
-            l.expected,
-            l.status,
-            l.isRegistered,
-            l.needsReview,
-          ),
+          (l.name, l.count, l.expected, l.status, l.isRegistered),
       ],
       [
-        ('A', 2, 2, MatchStatus.ok, true, false),
-        ('B', 1, 2, MatchStatus.missing, true, false),
-        ('D', 0, 1, MatchStatus.missing, true, false),
-        ('샘플약 C (주황색 타원형)', 1, 0, MatchStatus.unscheduled, false, true),
+        ('A', 2, 2, MatchStatus.ok, true),
+        ('B', 1, 2, MatchStatus.missing, true),
+        ('D', 0, 1, MatchStatus.missing, true),
+        ('샘플약 C (주황색 타원형)', 1, 0, MatchStatus.unscheduled, false),
       ],
     );
   });

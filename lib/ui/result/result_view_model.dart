@@ -13,9 +13,6 @@ import '../../data/services/pill_label_service.dart';
 import '../../utils/intake_matcher.dart';
 import '../../utils/object_finder.dart';
 
-/// 이 값보다 신뢰도가 낮으면 "확인 필요". 모델 저장소의 POINT_CONF와 같다.
-const reviewConfidence = 0.5;
-
 enum ResultStatus { detecting, ready, saving, failed }
 
 /// 결과 화면의 한 줄: 약 한 종류의 예정 개수와 확인한 개수.
@@ -26,7 +23,6 @@ class ResultLine {
     required this.name,
     required this.count,
     required this.expected,
-    required this.needsReview,
   });
 
   /// 등록한 약. 처음 기록하는 약이면 null이고, 저장할 때 등록한다.
@@ -37,7 +33,6 @@ class ResultLine {
 
   /// 지금 먹어야 할 개수. 지금 예정에 없으면 0.
   final int expected;
-  final bool needsReview;
 
   bool get isRegistered => medication != null;
   MatchStatus get status => matchStatus(expected: expected, recognized: count);
@@ -123,7 +118,6 @@ class ResultViewModel extends ChangeNotifier {
 
   Map<int, int> _due = {};
   final _counts = <int, int>{};
-  final _review = <int>{};
 
   /// 등록한 약 줄의 순서. medication_id.
   final _order = <int>[];
@@ -163,7 +157,6 @@ class ResultViewModel extends ChangeNotifier {
           name: byId[id]!.name,
           count: _counts[id] ?? 0,
           expected: _due[id] ?? 0,
-          needsReview: _review.contains(id),
         ),
       ..._unregistered.values,
     ];
@@ -209,7 +202,6 @@ class ResultViewModel extends ChangeNotifier {
     if (same) return;
     if (line.medication case final from?) {
       _counts.remove(from.id);
-      _review.remove(from.id);
       if (!_due.containsKey(from.id)) _order.remove(from.id);
     } else {
       _unregistered.remove(line.categoryId);
@@ -269,7 +261,6 @@ class ResultViewModel extends ChangeNotifier {
       groups.putIfAbsent(d.categoryId, () => []).add(d);
     }
     for (final group in groups.values) {
-      final needsReview = group.any((d) => d.confidence < reviewConfidence);
       final medication = byCategory[group.first.categoryId];
       if (medication == null) {
         _unregistered[group.first.categoryId] = ResultLine(
@@ -278,13 +269,11 @@ class ResultViewModel extends ChangeNotifier {
           name: group.first.name,
           count: group.length,
           expected: 0,
-          needsReview: needsReview,
         );
         continue;
       }
       _order.add(medication.id);
       _counts[medication.id] = group.length;
-      if (needsReview) _review.add(medication.id);
     }
     for (final id in _due.keys) {
       if (!_order.contains(id)) _order.add(id);
@@ -393,7 +382,6 @@ class ResultViewModel extends ChangeNotifier {
       name: choice.name,
       count: (current?.count ?? 0) + count,
       expected: 0,
-      needsReview: current?.needsReview ?? false,
     );
   }
 
@@ -418,7 +406,6 @@ class ResultViewModel extends ChangeNotifier {
       );
       _counts[id] = line.count;
       _order.add(id);
-      if (line.needsReview) _review.add(id);
     }
     medications = await _medications.getAll();
   }
@@ -433,7 +420,6 @@ class ResultViewModel extends ChangeNotifier {
         name: line.name,
         count: count,
         expected: 0,
-        needsReview: line.needsReview,
       );
     }
     _notify();

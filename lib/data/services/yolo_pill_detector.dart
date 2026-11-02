@@ -11,9 +11,6 @@ import 'pill_label_service.dart';
 class YoloPillDetector implements PillDetector {
   YoloPillDetector({required this.modelAsset, required this._labels});
 
-  /// 이 값보다 낮은 결과는 버린다. 0.5 미만은 결과 화면에서 "확인 필요"로 보인다.
-  static const minConfidence = 0.25;
-
   final String modelAsset;
   final PillLabelService _labels;
   Future<(YOLO, List<PillLabel>)>? _loaded;
@@ -35,7 +32,7 @@ class YoloPillDetector implements PillDetector {
     final (yolo, labels) = await (_loaded ??= _load());
     final output = await yolo.predict(
       imageBytes,
-      confidenceThreshold: minConfidence,
+      confidenceThreshold: minDetectionConfidence,
     );
     return toDetections([
       for (final box in output['boxes'] as List? ?? const []) box as Map,

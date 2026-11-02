@@ -37,7 +37,7 @@ class FakePillDetector implements PillDetector {
     Detection(
       categoryId: 9003,
       name: '샘플약 C (주황색 타원형)',
-      confidence: 0.42,
+      confidence: 0.62,
       box: Rect.fromLTRB(92, 378, 168, 512),
     ),
   ];
