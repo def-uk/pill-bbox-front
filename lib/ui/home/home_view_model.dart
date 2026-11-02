@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -24,7 +26,8 @@ class HomeViewModel extends ChangeNotifier {
   final DateTime Function() _now;
   bool _disposed = false;
 
-  static const samplePhotoAsset = 'assets/images/sample_pills.png';
+  /// 알약 사진이 없을 때 해 보는 샘플 사진을 두는 곳.
+  static const sampleDirectory = 'assets/images/test_images/';
 
   bool loading = true;
 
@@ -76,9 +79,20 @@ class HomeViewModel extends ChangeNotifier {
     }
   }
 
-  /// 알약 사진이 없을 때 흐름을 확인하는 사진.
-  Future<Uint8List> loadSamplePhoto() async =>
-      (await rootBundle.load(samplePhotoAsset)).buffer.asUint8List();
+  final _random = Random();
+  String? _lastSample;
+
+  /// 샘플 사진 중 하나를 고른다. 연달아 같은 사진은 고르지 않는다. 샘플이 없으면 null.
+  Future<Uint8List?> loadSamplePhoto() async {
+    final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+    final samples = [
+      for (final a in manifest.listAssets())
+        if (a.startsWith(sampleDirectory) && a != _lastSample) a,
+    ];
+    if (samples.isEmpty) return null;
+    final asset = _lastSample = samples[_random.nextInt(samples.length)];
+    return (await rootBundle.load(asset)).buffer.asUint8List();
+  }
 
   void _setPicking(bool value) {
     if (_disposed) return;

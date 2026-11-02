@@ -31,9 +31,6 @@ extension type _Box(JSObject _) implements JSObject {
 class OnnxPillDetector implements PillDetector {
   OnnxPillDetector({required this.modelAsset, required this._labels});
 
-  /// YoloPillDetector와 같은 기준으로 버린다.
-  static const minConfidence = 0.25;
-
   final String modelAsset;
   final PillLabelService _labels;
   Future<List<PillLabel>>? _loaded;
@@ -54,7 +51,10 @@ class OnnxPillDetector implements PillDetector {
   @override
   Future<List<Detection>> detect(Uint8List imageBytes) async {
     final labels = await (_loaded ??= _loadModel());
-    final boxes = await _detect(imageBytes.toJS, minConfidence.toJS).toDart;
+    final boxes = await _detect(
+      imageBytes.toJS,
+      minDetectionConfidence.toJS,
+    ).toDart;
     return toDetections([
       for (final b in boxes.toDart)
         {

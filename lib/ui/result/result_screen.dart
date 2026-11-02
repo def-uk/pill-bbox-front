@@ -1,8 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../data/models/detection.dart';
 import '../../utils/intake_matcher.dart';
 import '../common/theme.dart';
 import 'result_view_model.dart';
@@ -24,15 +24,45 @@ class ResultScreen extends StatelessWidget {
       }
     }
 
-    Future<PillChoice?> pick(String title) => showModalBottomSheet<PillChoice>(
+    Future<PillChoice?> pick(
+      String title, {
+      List<PillChoice> suggestions = const [],
+      String suggestionNote = '',
+    }) => showModalBottomSheet<PillChoice>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _ChoiceSearchSheet(title: title, choices: vm.choices),
+      builder: (_) => _ChoiceSearchSheet(
+        title: title,
+        choices: vm.choices,
+        suggestions: suggestions,
+        suggestionNote: suggestionNote,
+      ),
     );
 
+    Future<void> identify(UnknownObject object) async {
+      final similar = object.suggestion;
+      final choice = await pick(
+        '물체 ${object.number}은(는) 어떤 약인가요?',
+        suggestions: [
+          if (similar != null)
+            PillChoice(
+              medication: similar,
+              categoryId: similar.categoryId,
+              name: similar.name,
+            ),
+        ],
+        suggestionNote: '예전에 고른 약과 색·모양이 비슷해요',
+      );
+      if (choice != null) vm.identify(object, choice);
+    }
+
     Future<void> changeMedication(ResultLine line) async {
-      final choice = await pick('${line.name}을(를) 어떤 약으로 바꿀까요?');
+      final choice = await pick(
+        '${line.name}을(를) 어떤 약으로 바꿀까요?',
+        suggestions: vm.alternativesOf(line),
+        suggestionNote: '모델이 이 약과 헷갈렸어요',
+      );
       if (choice != null) vm.changeMedication(line, choice);
     }
 
@@ -59,16 +89,39 @@ class ResultScreen extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 16),
           children: [
             _PhotoWithBoxes(vm: vm),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-              child: Text(
-                '인식된 약',
-                style: Theme.of(context).textTheme.titleMedium,
+            if (vm.noPills) _NoPills(hasUnknowns: vm.unknowns.isNotEmpty),
+            if (vm.unknowns.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                child: Text(
+                  '알 수 없는 물체',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ),
-            ),
-            if (vm.lines.isEmpty)
-              const ListTile(
-                title: Text('알약을 찾지 못했습니다. 다른 사진을 올리거나 약을 추가해 주세요.'),
+              for (final object in vm.unknowns)
+                ListTile(
+                  leading: CircleAvatar(child: Text('${object.number}')),
+                  title: Text('물체 ${object.number}'),
+                  subtitle: Text(
+                    object.suggestion == null
+                        ? '눌러서 어떤 약인지 고르기'
+                        : '${object.suggestion!.name}과(와) 비슷해요 · 눌러서 고르기',
+                  ),
+                  onTap: () => identify(object),
+                  trailing: IconButton(
+                    tooltip: '물체 ${object.number}은(는) 약이 아님',
+                    onPressed: () => vm.dismiss(object),
+                    icon: const Icon(Icons.close),
+                  ),
+                ),
+            ],
+            if (vm.lines.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                child: Text(
+                  '인식된 약',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ),
             for (final line in vm.lines)
               ListTile(
@@ -161,30 +214,53 @@ class _LineStatus extends StatelessWidget {
       ),
       ResultLine(status: MatchStatus.unscheduled) => ('지금 예정에 없는 약', outline),
     };
-    return Text.rich(
-      TextSpan(
+    return Text(text, style: TextStyle(color: color));
+  }
+}
+
+/// 모델이 알약을 하나도 찾지 못했을 때.
+class _NoPills extends StatelessWidget {
+  const _NoPills({required this.hasUnknowns});
+
+  final bool hasUnknowns;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+      child: Column(
         children: [
-          TextSpan(
-            text: text,
-            style: TextStyle(color: color),
+          Text('알약이 없습니다', style: textTheme.titleLarge),
+          const SizedBox(height: 8),
+          Text(
+            hasUnknowns
+                ? '알약으로 보이지 않는 물체가 있습니다. 약이 맞다면 눌러서 무엇인지 알려 주세요.'
+                : '사진에서 알약을 찾지 못했습니다. 다른 사진을 쓰거나 약을 직접 추가해 주세요.',
+            textAlign: TextAlign.center,
+            style: textTheme.bodyMedium,
           ),
-          if (line.needsReview)
-            const TextSpan(
-              text: ' · 확인 필요',
-              style: TextStyle(color: reviewColor),
-            ),
         ],
       ),
     );
   }
 }
 
-/// 고를 약을 이름으로 찾는 시트. 등록한 약이 먼저 나온다.
+/// 고를 약을 이름으로 찾는 시트. 추천한 약, 등록한 약 순서로 나오고, 없으면 이름을 직접 넣는다.
 class _ChoiceSearchSheet extends StatefulWidget {
-  const _ChoiceSearchSheet({required this.title, required this.choices});
+  const _ChoiceSearchSheet({
+    required this.title,
+    required this.choices,
+    this.suggestions = const [],
+    this.suggestionNote = '',
+  });
 
   final String title;
   final List<PillChoice> choices;
+
+  /// 맨 위에 둘 약: 색·모양이 비슷한 약이나 모델이 헷갈린 약. 왜 추천하는지는 [suggestionNote].
+  final List<PillChoice> suggestions;
+  final String suggestionNote;
 
   @override
   State<_ChoiceSearchSheet> createState() => _ChoiceSearchSheetState();
@@ -195,10 +271,19 @@ class _ChoiceSearchSheetState extends State<_ChoiceSearchSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final suggestions = _query.isEmpty ? widget.suggestions : const [];
+    bool suggested(PillChoice c) => suggestions.any(
+      (s) => s.medication != null
+          ? s.medication!.id == c.medication?.id
+          : c.medication == null && s.categoryId == c.categoryId,
+    );
     final matches = [
       for (final c in widget.choices)
-        if (c.name.toLowerCase().contains(_query.toLowerCase())) c,
+        if (c.name.toLowerCase().contains(_query.toLowerCase()) &&
+            !suggested(c))
+          c,
     ];
+    final exact = widget.choices.any((c) => c.name == _query);
     return SafeArea(
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.75,
@@ -210,28 +295,41 @@ class _ChoiceSearchSheetState extends State<_ChoiceSearchSheet> {
               child: TextField(
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.search),
-                  hintText: '약 이름 검색',
+                  hintText: '약 이름 검색 · 없으면 이름 입력',
                 ),
                 onChanged: (value) => setState(() => _query = value.trim()),
               ),
             ),
             Expanded(
-              child: matches.isEmpty
-                  ? const Center(child: Text('찾는 약이 없습니다'))
-                  : ListView(
-                      children: [
-                        for (final c in matches)
-                          ListTile(
-                            title: Text(c.name),
-                            subtitle: c.medication == null
-                                ? null
-                                : Text(
-                                    '등록한 약 · 1회 ${c.medication!.dosePerTake}정',
-                                  ),
-                            onTap: () => Navigator.pop(context, c),
-                          ),
-                      ],
+              child: ListView(
+                children: [
+                  for (final c in suggestions)
+                    ListTile(
+                      leading: const Icon(Icons.auto_awesome),
+                      title: Text(c.name),
+                      subtitle: Text(widget.suggestionNote),
+                      onTap: () => Navigator.pop(context, c),
                     ),
+                  for (final c in matches)
+                    ListTile(
+                      title: Text(c.name),
+                      subtitle: c.medication == null
+                          ? null
+                          : Text('등록한 약 · 1회 ${c.medication!.dosePerTake}정'),
+                      onTap: () => Navigator.pop(context, c),
+                    ),
+                  if (_query.isNotEmpty && !exact)
+                    ListTile(
+                      leading: const Icon(Icons.edit),
+                      title: Text("'$_query' 새 약으로 등록"),
+                      subtitle: const Text('목록에 없는 약. 다음부터는 색·모양으로 추천해요'),
+                      onTap: () =>
+                          Navigator.pop(context, PillChoice.custom(_query)),
+                    ),
+                  if (matches.isEmpty && _query.isEmpty && suggestions.isEmpty)
+                    const ListTile(title: Text('찾는 약이 없습니다')),
+                ],
+              ),
             ),
           ],
         ),
@@ -283,6 +381,8 @@ class _PhotoWithBoxesState extends State<_PhotoWithBoxes> {
   Widget build(BuildContext context) {
     final size = _size;
     if (size == null) return const AspectRatio(aspectRatio: 4 / 3);
+    final primary = Theme.of(context).colorScheme.primary;
+    final unknownColor = Theme.of(context).colorScheme.tertiary;
     return AspectRatio(
       aspectRatio: size.width / size.height,
       child: Stack(
@@ -291,9 +391,17 @@ class _PhotoWithBoxesState extends State<_PhotoWithBoxes> {
           Image(image: _image, fit: BoxFit.fill, gaplessPlayback: true),
           CustomPaint(
             painter: _BoxPainter(
-              detections: widget.vm.detections,
               photoSize: size,
-              color: Theme.of(context).colorScheme.primary,
+              marks: [
+                for (final d in widget.vm.detections)
+                  (
+                    d.box,
+                    '${d.name} ${(d.confidence * 100).round()}%',
+                    primary,
+                  ),
+                for (final o in widget.vm.unknowns)
+                  (o.box, '물체 ${o.number}', unknownColor),
+              ],
             ),
           ),
         ],
@@ -302,44 +410,42 @@ class _PhotoWithBoxesState extends State<_PhotoWithBoxes> {
   }
 }
 
+/// 박스 하나: 원본 이미지 픽셀 좌표, 이름표, 색.
+typedef _Mark = (Rect box, String label, Color color);
+
 class _BoxPainter extends CustomPainter {
   // 웹은 한글 글꼴을 필요할 때 받는다. 받은 뒤 다시 그리지 않으면 약 이름 일부가 □로 남는다.
-  _BoxPainter({
-    required this.detections,
-    required this.photoSize,
-    required this.color,
-  }) : super(repaint: PaintingBinding.instance.systemFonts);
+  _BoxPainter({required this.marks, required this.photoSize})
+    : super(repaint: PaintingBinding.instance.systemFonts);
 
-  final List<Detection> detections;
+  final List<_Mark> marks;
   final Size photoSize;
-  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
     final scaleX = size.width / photoSize.width;
     final scaleY = size.height / photoSize.height;
-    for (final d in detections) {
-      final boxColor = d.confidence < reviewConfidence ? reviewColor : color;
+    for (final (box, text, color) in marks) {
       final rect = Rect.fromLTRB(
-        d.box.left * scaleX,
-        d.box.top * scaleY,
-        d.box.right * scaleX,
-        d.box.bottom * scaleY,
+        box.left * scaleX,
+        box.top * scaleY,
+        box.right * scaleX,
+        box.bottom * scaleY,
       );
       canvas.drawRect(
         rect,
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2
-          ..color = boxColor,
+          ..color = color,
       );
       final label = TextPainter(
         text: TextSpan(
-          text: ' ${d.name} ${(d.confidence * 100).round()}% ',
+          text: ' $text ',
           style: TextStyle(
             color: Colors.white,
             fontSize: 11,
-            backgroundColor: boxColor,
+            backgroundColor: color,
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -351,7 +457,5 @@ class _BoxPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BoxPainter old) =>
-      old.detections != detections ||
-      old.photoSize != photoSize ||
-      old.color != color;
+      !listEquals(old.marks, marks) || old.photoSize != photoSize;
 }

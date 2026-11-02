@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pillbbox/data/services/database_service.dart';
+import 'package:pillbbox/data/services/fake_pill_detector.dart';
 import 'package:pillbbox/data/services/photo_picker_service.dart';
 import 'package:pillbbox/data/services/photo_storage_service.dart';
-import 'package:pillbbox/ui/home/home_view_model.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// 메모리 DB. 위젯 테스트의 가짜 시간 안에서도 돌도록 isolate를 쓰지 않는다.
@@ -42,7 +42,7 @@ class SamplePhotoPickerService extends PhotoPickerService {
   Future<Uint8List?> pick(PhotoSource source) async {
     sources.add(source);
     return (await rootBundle.load(
-      HomeViewModel.samplePhotoAsset,
+      FakePillDetector.photoAsset,
     )).buffer.asUint8List();
   }
 }
