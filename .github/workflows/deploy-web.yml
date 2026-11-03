@@ -34,7 +34,9 @@ jobs:
         id: model-cache
         uses: actions/cache@v4
         with:
-          path: assets/models/pillbox-*
+          path: |
+            assets/models/pillbox-*
+            assets/models/*/pillbox-*
           key: model-${{ hashFiles('assets/models/VERSION', 'scripts/fetch_model.sh') }}
 
       - uses: astral-sh/setup-uv@v6

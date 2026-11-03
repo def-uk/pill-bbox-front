@@ -18,14 +18,15 @@ fvm flutter run
 fvm flutter test
 ```
 
-`scripts/fetch_model.sh`는 `assets/models/VERSION`에 적힌 탐지 모델을 받습니다. 받지 않으면 고정된 결과를 돌려주는 `FakePillDetector`로 돕니다. 지금 버전은 `combofix-v1-fold1`(`yolo11m`, 약 96종)입니다.
+`scripts/fetch_model.sh`는 `assets/models/VERSION`에 적힌 탐지 모델을 받습니다. 받지 않으면 고정된 결과를 돌려주는 `FakePillDetector`로 돕니다. 지금 버전은 `combofix-v1-fold1-w8`(`yolo11m`, 약 96종, 가중치 int8)입니다.
 
 홈의 "기록하기"를 누르고 "사진 찍기"(카메라)나 "사진 올리기"(갤러리, 웹은 파일 선택 창)를 골라 기록합니다. 카메라가 없는 iOS 시뮬레이터처럼 사진이 없으면 홈의 "샘플 사진으로 해 보기"로 흐름을 확인합니다. 샘플은 `assets/images/test_images/`에서 무작위로 고릅니다.
 
 ## 배운 것과 결정한 것
 
 **모델**
-- 쓰는 모델은 `combofix-v1-fold1`(`yolo11m`)입니다. 대회 56종에 AI Hub 40종을 더한 96종을 찾습니다.
+- 쓰는 모델은 `combofix-v1-fold1-w8`(`yolo11m`)입니다. 대회 56종에 AI Hub 40종을 더한 96종을 찾습니다.
+- 가중치를 int8로 저장해 모델 파일을 80MB에서 20MB로 줄였습니다. 탐지 결과는 원래 모델과 같았습니다. 플랫폼마다 자기 모델만 빌드에 넣습니다.
 - 라벨의 `category_id`는 K-코드 숫자입니다(`K-000250` → 250). AI Hub 원본의 `dl_idx`는 이보다 1 작으니 그대로 쓰면 안 됩니다.
 - 학습에 쓰지 않은 AI Hub 약은 라벨에 넣어도 인식되지 않습니다. 인식하려면 다시 학습해야 합니다.
 - export할 때 Core ML은 `torch==2.7.1`, LiteRT는 `litert-torch`를 미리 같이 설치해야 합니다. 실행 중에 자동 설치되면 torch 버전이 어긋나 실패합니다.
