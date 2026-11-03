@@ -52,6 +52,39 @@ class HomeScreen extends StatelessWidget {
       }
     }
 
+    Future<void> exportExcel() async {
+      final messenger = ScaffoldMessenger.of(context);
+      try {
+        if (await vm.exportExcel()) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('엑셀로 내보냈습니다. 사진은 들어가지 않습니다.')),
+          );
+        }
+      } catch (_) {
+        messenger.showSnackBar(const SnackBar(content: Text('내보내지 못했습니다')));
+      }
+    }
+
+    // 파일 창은 메뉴를 누른 그 처리 안에서 연다(웹, 아래 chooseSource와 같은 까닭).
+    Future<void> importExcel() async {
+      final messenger = ScaffoldMessenger.of(context);
+      String message;
+      try {
+        final summary = await vm.importExcel();
+        if (summary == null) return;
+        final (:medications, :records, :skippedRows) = summary;
+        message = medications == 0 && records == 0
+            ? '새로 가져올 약이나 기록이 없습니다'
+            : '약 $medications개, 기록 $records개를 가져왔습니다';
+        if (skippedRows > 0) message += ' · 읽지 못한 행 $skippedRows개';
+      } on FormatException catch (e) {
+        message = e.message;
+      } catch (_) {
+        message = '가져오지 못했습니다';
+      }
+      messenger.showSnackBar(SnackBar(content: Text(message)));
+    }
+
     // 웹은 사용자가 누른 그 순간에 열어야 브라우저가 카메라·파일 창을 막지 않는다.
     // 그래서 시트를 닫는 것과 같은 탭 처리 안에서 바로 연다.
     void chooseSource() => showModalBottomSheet<void>(
@@ -110,6 +143,13 @@ class HomeScreen extends StatelessWidget {
             tooltip: '약 관리',
             onPressed: () => context.push('/medications'),
             icon: const Icon(Icons.medication),
+          ),
+          PopupMenuButton<void>(
+            tooltip: '더 보기',
+            itemBuilder: (_) => [
+              PopupMenuItem(onTap: exportExcel, child: const Text('엑셀로 내보내기')),
+              PopupMenuItem(onTap: importExcel, child: const Text('엑셀에서 가져오기')),
+            ],
           ),
         ],
       ),

@@ -4,8 +4,10 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import 'data/repositories/backup_repository.dart';
 import 'data/repositories/intake_repository.dart';
 import 'data/repositories/medication_repository.dart';
+import 'data/services/backup_file_service.dart';
 import 'data/services/database_service.dart';
 import 'data/services/fake_pill_detector.dart';
 import 'data/services/model_bundle.dart';
@@ -46,6 +48,7 @@ class PillboxApp extends StatefulWidget {
     required this.picker,
     required this.detector,
     required this.labels,
+    this.backupFiles,
   });
 
   final DatabaseService database;
@@ -53,6 +56,7 @@ class PillboxApp extends StatefulWidget {
   final PhotoPickerService picker;
   final PillDetector detector;
   final PillLabelService labels;
+  final BackupFileService? backupFiles;
 
   @override
   State<PillboxApp> createState() => _PillboxAppState();
@@ -75,11 +79,15 @@ class _PillboxAppState extends State<PillboxApp> {
         Provider.value(value: widget.picker),
         Provider.value(value: widget.detector),
         Provider.value(value: widget.labels),
+        Provider.value(value: widget.backupFiles ?? BackupFileService()),
         ChangeNotifierProvider(
           create: (_) => MedicationRepository(widget.database, widget.photos),
         ),
         ChangeNotifierProvider(
           create: (_) => IntakeRepository(widget.database, widget.photos),
+        ),
+        Provider(
+          create: (context) => BackupRepository(context.read(), context.read()),
         ),
       ],
       child: MaterialApp.router(

@@ -4,16 +4,21 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../../data/models/medication.dart';
+import '../../data/repositories/backup_repository.dart';
 import '../../data/repositories/intake_repository.dart';
 import '../../data/repositories/medication_repository.dart';
+import '../../data/services/backup_file_service.dart';
 import '../../data/services/photo_picker_service.dart';
 import '../../utils/intake_matcher.dart';
+import '../../utils/time_format.dart';
 
 class HomeViewModel extends ChangeNotifier {
   HomeViewModel({
     required this._intakes,
     required this._medications,
     required this._picker,
+    required this._backup,
+    required this._backupFiles,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now {
     _intakes.addListener(load);
@@ -23,6 +28,8 @@ class HomeViewModel extends ChangeNotifier {
   final IntakeRepository _intakes;
   final MedicationRepository _medications;
   final PhotoPickerService _picker;
+  final BackupRepository _backup;
+  final BackupFileService _backupFiles;
   final DateTime Function() _now;
   bool _disposed = false;
 
@@ -77,6 +84,18 @@ class HomeViewModel extends ChangeNotifier {
     } finally {
       _setPicking(false);
     }
+  }
+
+  /// 약·기록을 엑셀로 내보낸다. 저장했으면 true.
+  Future<bool> exportExcel() async => _backupFiles.save(
+    'pillbbox-${dateKey(_now())}.xlsx',
+    await _backup.exportExcel(),
+  );
+
+  /// 엑셀 파일을 골라 지금 데이터에 합친다. 고르지 않으면 null, 이 앱이 내보낸 형식이 아니면 [FormatException].
+  Future<ImportSummary?> importExcel() async {
+    final bytes = await _backupFiles.pick();
+    return bytes == null ? null : _backup.importExcel(bytes);
   }
 
   final _random = Random();

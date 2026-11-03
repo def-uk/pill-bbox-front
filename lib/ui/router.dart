@@ -26,6 +26,8 @@ GoRouter buildRouter() => GoRouter(
           intakes: context.read(),
           medications: context.read(),
           picker: context.read(),
+          backup: context.read(),
+          backupFiles: context.read(),
         )..load(),
         child: const HomeScreen(),
       ),

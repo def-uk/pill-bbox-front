@@ -81,6 +81,52 @@ class IntakeRepository extends ChangeNotifier {
     return rows.map(IntakeRecord.fromMap).toList();
   }
 
+  /// 모든 기록. 시간순.
+  Future<List<IntakeRecord>> allRecords() async {
+    final db = await _db.database;
+    final rows = await db.query('intake_records', orderBy: 'taken_at, id');
+    return rows.map(IntakeRecord.fromMap).toList();
+  }
+
+  /// 백업에서 가져온 기록을 사진 없이 넣는다. 같은 약·같은 시각(초까지)·같은 개수의 기록이 이미 있으면
+  /// 건너뛰어, 같은 파일을 두 번 가져와도 겹치지 않는다. 넣은 기록 수를 돌려준다.
+  Future<int> importRecords(
+    List<({int medicationId, DateTime takenAt, int count, IntakeSource source})>
+    records,
+  ) async {
+    final db = await _db.database;
+    final added = await db.transaction((txn) async {
+      final existing = {
+        for (final row in await txn.query('intake_records'))
+          (
+            row['medication_id']! as int,
+            (row['taken_at']! as int) ~/ 1000,
+            row['count']! as int,
+          ),
+      };
+      var added = 0;
+      for (final r in records) {
+        final key = (
+          r.medicationId,
+          r.takenAt.millisecondsSinceEpoch ~/ 1000,
+          r.count,
+        );
+        if (r.count <= 0 || !existing.add(key)) continue;
+        await txn.insert('intake_records', {
+          'medication_id': r.medicationId,
+          'taken_at': r.takenAt.millisecondsSinceEpoch,
+          'count': r.count,
+          'source': r.source.name,
+          'photo_path': null,
+        });
+        added++;
+      }
+      return added;
+    });
+    if (added > 0) notifyListeners();
+    return added;
+  }
+
   /// 기록이 있는 날짜(기기 시간대). 최근 날짜부터.
   Future<List<DateTime>> recordedDays() async {
     final db = await _db.database;
