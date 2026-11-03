@@ -79,14 +79,24 @@ class MedicationRepository extends ChangeNotifier {
     return savedId;
   }
 
-  /// 사용자가 사진 속 물체를 [medicationId] 약으로 골랐을 때 그 물체의 색·모양을 남긴다.
+  /// [medicationId] 약으로 기록한 알약의 색·모양을 남긴다. 약마다 최근 [appearancesPerMedication]개만 둔다.
   Future<void> addAppearance(int medicationId, Appearance appearance) async {
     final db = await _db.database;
     await db.insert('appearances', {
       'medication_id': medicationId,
       ...appearance.toMap(),
     });
+    await db.delete(
+      'appearances',
+      where:
+          'medication_id = ? AND id NOT IN '
+          '(SELECT id FROM appearances WHERE medication_id = ? ORDER BY id DESC LIMIT ?)',
+      whereArgs: [medicationId, medicationId, appearancesPerMedication],
+    );
   }
+
+  /// 약마다 남기는 색·모양 수. 기록할 때마다 쌓이므로 오래된 것부터 지운다.
+  static const appearancesPerMedication = 20;
 
   /// 남겨 둔 색·모양 전부. (medication_id, 색·모양)
   Future<List<(int, Appearance)>> appearances() async {
