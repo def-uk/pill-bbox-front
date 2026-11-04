@@ -105,8 +105,10 @@ class HomeScreen extends StatelessWidget {
                     child: FilledButton.tonal(
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 20),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.all(
+                            Radius.circular(AppRadius.lg),
+                          ),
                         ),
                       ),
                       onPressed: () {
@@ -217,10 +219,17 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       },
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: vm.picking ? null : chooseSource,
-        icon: const Icon(Icons.add),
-        label: const Text('기록하기'),
+      // 이 앱에서 그림자가 있는 것은 이 버튼 하나다(DESIGN.md 깊이).
+      floatingActionButton: DecoratedBox(
+        decoration: const ShapeDecoration(
+          shape: StadiumBorder(),
+          shadows: [captureShadow],
+        ),
+        child: FloatingActionButton.extended(
+          onPressed: vm.picking ? null : chooseSource,
+          icon: const Icon(Icons.photo_camera_rounded),
+          label: const Text('기록하기'),
+        ),
       ),
     );
   }
