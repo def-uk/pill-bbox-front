@@ -244,16 +244,16 @@ web/pill_detector.js          # 웹 탐지 (onnxruntime-web)
 | 화면 이동 | `go_router` |
 | 알림 (2차) | `flutter_local_notifications` |
 
-## 6. 배포: 웹 (GitHub Pages)
+## 6. 배포: 웹 (맥미니)
 
 ### 6.1 범위
 
-먼저 웹으로 배포합니다. 스토어 계정·심사·서명 없이 링크만 나누면 휴대폰 브라우저에서 바로 씁니다. 서버는 두지 않고 `flutter build web` 결과를 정적 사이트로 올립니다.
+먼저 웹으로 배포합니다. 스토어 계정·심사·서명 없이 링크만 나누면 휴대폰 브라우저에서 바로 씁니다. `flutter build web` 결과를 맥미니에 올리고, Cloudflare Tunnel로 `www.<도메인>`에 엽니다. API(`api.<도메인>`)와 같은 맥미니에서 프로세스만 따로 띄웁니다([backend/README.md](../backend/README.md)). 처음에는 GitHub Pages에 올렸습니다.
 
 | 단계 | 내용 | 언제 |
 |---|---|---|
 | 0 | 로컬에서 `fvm flutter run -d chrome` | 처음부터 |
-| 1 | `main`에 합치면 GitHub Actions가 빌드해 GitHub Pages에 올림 | 지금 |
+| 1 | `main`에 합치면 GitHub Actions가 빌드해 맥미니에 올림 | 지금 |
 | 2 | 앱 스토어 테스트 배포 (fastlane `beta`) | 앱이 필요해질 때. 설정은 `feat/fastlane-beta` 브랜치에 있음 |
 
 ### 6.2 워크플로
@@ -264,12 +264,14 @@ web/pill_detector.js          # 웹 탐지 (onnxruntime-web)
 |---|---|
 | 모델 받기 | `scripts/fetch_model.sh` (`VERSION`의 태그). 받은 모델은 `VERSION`·스크립트가 바뀔 때까지 캐시 |
 | SQLite wasm | `dart run sqflite_common_ffi_web:setup`이 `web/sqlite3.wasm`, `web/sqflite_sw.js`를 만듦 (Git 제외) |
-| 빌드 | `flutter build web --base-href /<저장소 이름>/` |
-| 올리기 | `main` push일 때만 Pages에 배포. PR에서는 빌드만 확인 |
+| 빌드 | `flutter build web --base-href / --dart-define=API_BASE_URL=<저장소 variable>` |
+| 올리기 | `main` push일 때만 빌드를 묶어 SSH로 맥미니에 보내고, `~/srv/pillbbox-data/web/releases/<커밋>`에 풀어 `current`를 그쪽으로 바꿈. 최근 3개만 남김. PR에서는 빌드만 확인 |
 
-- 주소는 `https://def-uk.github.io/pill-bbox-front/`입니다.
-- 처음 한 번 저장소 설정에서 Pages의 Source를 **GitHub Actions**로 바꿔야 합니다.
-- 화면 이동은 해시 URL(`/#/history`)이라 Pages에 별도 404 처리가 필요 없습니다.
+- 주소는 `https://www.<도메인>`입니다.
+- 맥미니의 웹 서버(`com.pillbbox.web`, `backend/app/web.py`)는 백엔드 배포가 띄웁니다. 웹 배포는 파일만 바꾸고 서버를 다시 띄우지 않습니다.
+- 파일 이름에 버전이 없는 파일은 `no-cache`로 내보내 배포하면 바로 새 버전이 보입니다. 모델은 파일 이름에 버전이 있어 오래 캐시합니다.
+- 화면 이동은 해시 URL(`/#/history`)이라 별도 404 처리가 필요 없습니다.
+- 되돌리려면 맥미니에서 `ln -sfn ~/srv/pillbbox-data/web/releases/<이전 커밋> ~/srv/pillbbox-data/web/current`.
 
 ### 6.3 로컬에서 웹 확인
 
@@ -291,7 +293,7 @@ fvm flutter run -d chrome
 | 2 | 약 관리, 일정, 기록, 홈(오늘) | 일정 등록 후 홈에 예정·완료가 보임 |
 | 3 | 모델 export, `YoloPillDetector` | 실제 기기에서 테스트 사진 10장의 결과가 모델 저장소 예측과 같음 |
 | 4 | 휴대폰 사진으로 성능 확인 | 실제로 찍은 사진 20장 이상의 인식 결과 정리, 모델 팀과 공유 |
-| 5 | 웹 배포 (GitHub Pages) | 팀원이 휴대폰 브라우저에서 링크로 열어 사진을 올려 기록 |
+| 5 | 웹 배포 (GitHub Pages, 지금은 맥미니) | 팀원이 휴대폰 브라우저에서 링크로 열어 사진을 올려 기록 |
 | 5-1 (나중) | 앱 스토어 테스트 배포 (fastlane `beta`) | 팀원이 TestFlight / 내부 테스트로 설치 |
 | 6 (2차) | 알림 | |
 

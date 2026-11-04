@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///data/pillbbox.db"
     samples_dir: Path = Path("data/samples")
 
+    # 웹 앱 빌드 폴더 (app/web.py). 배포가 releases/<커밋>을 만들고 current를 그쪽으로 바꾼다.
+    web_dir: Path = Path("data/web/current")
+
     # 쉼표로 나눈 웹 주소. 경로 없이 scheme + host.
     cors_origins: str = "http://localhost:8080"
 
