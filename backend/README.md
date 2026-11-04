@@ -34,7 +34,7 @@ pillbbox 앱의 사진을 모아 탐지 모델을 개선하고, 약·복용 기�
 [휴대폰 브라우저 / 앱]  GitHub Pages의 웹 앱. SampleUploader(사진), ServerBackupService(백업)
         │ HTTPS
         ▼
-[Cloudflare]  https://pillbbox-api.<도메인>   for-nav와 같은 터널에 호스트 이름만 추가
+[Cloudflare]  https://pillbbox-api.<도메인>   Cloudflare Tunnel
         │ 터널 (맥미니의 cloudflared가 바깥으로 연결해 둠)
         ▼
 [맥미니]  cloudflared
@@ -57,8 +57,8 @@ pillbbox 앱의 사진을 모아 탐지 모델을 개선하고, 약·복용 기�
 | 패키지 | [uv](https://docs.astral.sh/uv/) (`uv.lock`으로 고정) | 모델 스크립트에서 이미 씀. 맥미니에서 `uv sync --frozen` 한 줄로 같은 환경 |
 | DB | SQLite + SQLAlchemy 2.0 | 맥미니 한 대라 DB 서버가 필요 없음. 파일 하나라 백업이 쉬움 |
 | 사진 | DB 밖 파일 (`samples/<연-월>/<id>.jpg`) | 장당 약 20KB. 하루 1,000장이어도 20MB |
-| 바깥 공개 | Cloudflare Tunnel (for-nav와 같은 터널) | 이미 쓰고 있어 새로 설치할 것이 없음. 공유기 포트를 열지 않고 HTTPS 주소가 생김. GitHub Pages(HTTPS)에서 부르려면 API도 HTTPS여야 함 |
-| 배포 | `main`에 합치면 GitHub Actions가 SSH로 맥미니에 들어가 `git pull` 후 `deploy.sh` (5장) | 다른 프로젝트(for-nav)와 같은 방식. GitHub가 제공하는 러너에서 돌고 `main` push에만 돌아, public 저장소여도 PR 코드가 맥미니에서 돌지 않음 |
+| 바깥 공개 | Cloudflare Tunnel | 팀이 이미 Cloudflare를 씀. 공유기 포트를 열지 않고 HTTPS 주소가 생김. GitHub Pages(HTTPS)에서 부르려면 API도 HTTPS여야 함 |
+| 배포 | `main`에 합치면 GitHub Actions가 SSH로 맥미니에 들어가 `git pull` 후 `deploy.sh` (5장) | 맥미니에 따로 프로그램을 띄워 둘 필요가 없음. GitHub가 제공하는 러너에서 돌고 `main` push에만 돌아, public 저장소여도 PR 코드가 맥미니에서 돌지 않음 |
 
 ## 3. API
 
@@ -290,7 +290,7 @@ DB 테이블은 셋입니다.
 
 ```bash
 # 1. 도구
-brew install uv git          # cloudflared는 for-nav 때 설치되어 있음
+brew install uv git cloudflared
 
 # 2. 배포용 클론과 데이터 폴더. 클론은 첫 배포 때 워크플로가 만들어도 됨
 mkdir -p ~/srv ~/srv/pillbbox-data/{data,backups,logs}
@@ -301,25 +301,25 @@ cp ~/srv/pillbbox/backend/.env.example ~/srv/pillbbox-data/.env   # 값 채우�
 cp ~/srv/pillbbox/backend/deploy/com.pillbbox.api.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.pillbbox.api.plist
 
-# 4. 배포용 SSH 키. for-nav와 같은 sshd(포트 2222)를 쓰고, 키는 이 저장소 전용으로 따로 만듦
+# 4. 배포용 SSH 키. 원격 로그인을 켜고(포트 2222로 열어 둔 경우), 키는 이 저장소 전용으로 따로 만듦
 ssh-keygen -t ed25519 -f ~/pillbbox-deploy -N "" -C pillbbox-deploy
 cat ~/pillbbox-deploy.pub >> ~/.ssh/authorized_keys
 # ~/pillbbox-deploy(비밀 키)를 저장소 secrets의 MAC_MINI_SSH_KEY에 넣고 파일은 지움
 
-# 5. 바깥에 HTTPS로 공개: for-nav의 터널에 호스트 이름 추가 (아래)
+# 5. 바깥에 HTTPS로 공개: Cloudflare Tunnel에 호스트 이름 추가 (아래)
 curl https://pillbbox-api.<도메인>/health
 ```
 
-터널을 어떻게 만들었는지에 따라 둘 중 하나입니다.
+맥미니에 이미 Cloudflare Tunnel이 있으면 그 터널에 호스트 이름만 더하고, 없으면 Zero Trust 대시보드에서 터널을 새로 만들어 맥미니에 `cloudflared service install <토큰>`으로 설치합니다. 터널을 어떻게 만들었는지에 따라 호스트 이름을 더하는 방법이 다릅니다.
 
-- **대시보드에서 만든 터널**(`cloudflared service install <토큰>`으로 설치): Cloudflare Zero Trust → Networks → Tunnels → for-nav 터널 → Public Hostname 추가. 호스트 이름 `pillbbox-api.<도메인>`, 서비스 `http://localhost:8100`. 맥미니에서 할 일은 없습니다.
+- **대시보드에서 만든 터널**(`cloudflared service install <토큰>`으로 설치): Cloudflare Zero Trust → Networks → Tunnels → 그 터널 → Public Hostname 추가. 호스트 이름 `pillbbox-api.<도메인>`, 서비스 `http://localhost:8100`. 맥미니에서 할 일은 없습니다.
 - **설정 파일로 만든 터널**(`~/.cloudflared/config.yml`): `ingress`의 맨 끝(`service: http_status:404`) **앞에** 한 줄을 더하고, DNS를 잇고, cloudflared를 다시 띄웁니다.
 
   ```yaml
   ingress:
     - hostname: pillbbox-api.<도메인>
       service: http://localhost:8100
-    # … for-nav 항목들
+    # … 이미 있는 항목들
     - service: http_status:404
   ```
 
@@ -331,7 +331,7 @@ curl https://pillbbox-api.<도메인>/health
 
 - 배포용 클론은 개발용과 따로 둡니다. 워크플로가 `git pull --ff-only`로 맞추므로 여기서 코드를 고치지 않습니다. 고치면 다음 배포가 실패합니다.
 - DB·사진·`.env`·로그는 클론 밖(`~/srv/pillbbox-data/`)에 둡니다. 클론을 지우고 다시 받아도 데이터는 남습니다.
-- 포트는 for-nav와 겹치지 않게 `8100`을 씁니다.
+- 포트는 맥미니의 다른 서비스와 겹치지 않게 `8100`을 씁니다.
 - 맥미니 설정: **잠자기 안 함**(설정 → 에너지 → "디스플레이가 꺼져 있을 때 자동으로 잠자지 않기"), **정전 후 자동 시작** 켬.
 - `launchd` 에이전트는 사용자가 로그인해야 뜹니다. SSH로 들어온 `deploy.sh`의 `launchctl kickstart gui/…`도 로그인한 세션이 있어야 됩니다. 건강 정보라 FileVault는 켜 두고, 그 대신 재부팅 뒤에는 한 번 직접 로그인합니다. 계획한 재부팅은 `sudo fdesetup authrestart`로 로그인까지 건너뜁니다.
 - `com.pillbbox.api.plist`는 `KeepAlive`를 켜서 서버가 죽으면 다시 띄우고, 로그는 `~/srv/pillbbox-data/logs/`에 씁니다.
@@ -362,7 +362,7 @@ uvicorn은 `127.0.0.1`에만 엽니다. 바깥에서는 Cloudflare Tunnel을 거
                                                                          bash backend/deploy/deploy.sh
 ```
 
-`.github/workflows/deploy-backend.yml`은 for-nav의 워크플로를 그대로 따릅니다.
+`.github/workflows/deploy-backend.yml`:
 
 ```yaml
 on:
@@ -399,8 +399,7 @@ jobs:
             bash backend/deploy/deploy.sh
 ```
 
-- `concurrency` 그룹은 저장소마다 따로입니다. for-nav 배포와 동시에 돌 수는 있지만, 클론·포트·launchd 이름이 달라 서로 건드리지 않습니다.
-- secrets는 셋입니다: `MAC_MINI_IP`, `MAC_MINI_USERNAME`, `MAC_MINI_SSH_KEY`. 저장소 secrets는 저장소마다 따로라 이 저장소에도 넣어야 합니다. IP와 사용자는 for-nav와 같고, 키는 5.2의 배포 전용 키입니다.
+- secrets는 셋입니다: `MAC_MINI_IP`, `MAC_MINI_USERNAME`, `MAC_MINI_SSH_KEY`. 키는 5.2의 배포 전용 키입니다. 집 IP가 바뀌면 `MAC_MINI_IP`도 바꿔야 하니, 고정 IP가 아니면 DDNS 주소를 넣습니다.
 
 `deploy.sh`가 하는 일:
 
@@ -484,6 +483,6 @@ fvm flutter run -d chrome --web-port 8080 --dart-define=API_BASE_URL=http://loca
 | 사진 보관 기간 | 1년. 검수해 학습 데이터로 옮긴 사진은 모델 저장소 규칙을 따름 | 팀 |
 | 수집 동의 문구 | 4.3의 항목. 팀 밖 사람에게 열기 전에 개인정보 처리방침과 민감정보 동의가 법에 맞는지 확인 | 팀 |
 | 검수 도구 | 처음에는 내보낸 폴더를 직접 봄. 많아지면 Label Studio 같은 도구 | 모델 팀 |
-| 바깥 공개 방법 | for-nav의 Cloudflare Tunnel에 `pillbbox-api.<도메인>` 추가. 도메인과 호스트 이름은 정해야 함 | 팀 |
+| 바깥 공개 방법 | Cloudflare Tunnel에 `pillbbox-api.<도메인>` 추가. 도메인과 호스트 이름은 정해야 함 | 팀 |
 | 건강 정보 보관 | 맥미니 FileVault + 코드 해시만 저장. 서버 데이터는 암호화하지 않음. 백업은 필요하면 앱에서 코드로 암호화해 올릴 수 있음(종단 간 암호화). 사진은 학습에 써야 하므로 서버가 읽을 수 있어야 함. Cloudflare Tunnel은 Cloudflare에서 HTTPS를 풀었다가 다시 감싸므로, 사진과 백업이 Cloudflare를 지남. 수집 동의 화면의 "어디에"에 적음 | 팀 |
 | 엑셀 백업을 남길지 | 남김. 서버 없이도 쓸 수 있고, 서버를 내려도 데이터를 옮길 수 있음 | 팀 |
