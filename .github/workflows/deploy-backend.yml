@@ -1,6 +1,8 @@
 # main에 backend/가 합쳐지면 테스트를 돌리고 맥미니에 배포한다 (backend/README.md 5.3).
 # 맥미니의 클론(~/srv/pillbbox, 없으면 새로 클론)을 main으로 올리고 backend/deploy/deploy.sh를 돌린다.
+# 배포 뒤 바깥 주소(api.<도메인>)의 /health가 이 커밋을 돌려주는지 본다 (.github/scripts/smoke.sh).
 # 필요한 secrets: MAC_MINI_IP, MAC_MINI_USERNAME, MAC_MINI_SSH_KEY, MAC_MINI_SSH_FINGERPRINT
+# 필요한 variables: API_BASE_URL (https://api.<도메인>)
 name: 백엔드 배포 (맥미니)
 
 on:
@@ -32,7 +34,10 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
+      # backend.yml과 같은 검사. PR에서 통과했어도 main에서 한 번 더 막는다
       - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
       - run: uv run pytest -q
 
   deploy:
@@ -62,3 +67,10 @@ jobs:
             git switch main
             git pull --ff-only origin main
             bash backend/deploy/deploy.sh
+
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: 바깥에서 확인 (api.<도메인>/health)
+        run: .github/scripts/smoke.sh api "${{ vars.API_BASE_URL }}" "${{ github.sha }}"

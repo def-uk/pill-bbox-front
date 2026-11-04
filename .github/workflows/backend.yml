@@ -1,12 +1,12 @@
-# 백엔드(backend/)를 검사한다 (backend/README.md 5.4). 배포는 deploy-backend.yml이 따로 맡는다.
+# 백엔드(backend/)를 검사한다 (backend/README.md 5.4, docs/CICD.md). 배포는 deploy-backend.yml이 따로 맡는다.
+# main ruleset의 필수 체크(backend-check)라서 모든 PR에서 돈다. backend/를 건드리지 않은 PR은 검사를 건너뛰고 통과한다.
+# on:에 paths를 걸면 워크플로가 아예 돌지 않아 필수 체크가 영영 대기로 남는다.
 name: 백엔드
 
 on:
   push:
     branches: [main]
-    paths: [backend/**, .github/workflows/backend.yml]
   pull_request:
-    paths: [backend/**, .github/workflows/backend.yml]
 
 permissions:
   contents: read
@@ -16,7 +16,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/backend.yml'
+
   test:
+    name: backend-check
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:

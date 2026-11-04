@@ -20,8 +20,8 @@ class WebFiles(StaticFiles):
 
     교차 출처 격리(COOP/COEP)를 켠다. 그래야 브라우저가 SharedArrayBuffer를 열어 주고,
     onnxruntime-web이 wasm 스레드 여러 개로 알약을 찾는다 (frontend/web/pill_detector_worker.js).
-    require-corp라 다른 출처 파일은 CORP나 CORS 헤더가 있어야 읽힌다. 지금 쓰는 jsDelivr(onnxruntime)와
-    gstatic(CanvasKit, 글꼴)은 둘 다 보낸다.
+    require-corp라 다른 출처 파일은 CORP나 CORS 헤더가 있어야 읽힌다.
+    지금 쓰는 jsDelivr(onnxruntime)와 gstatic(CanvasKit, 글꼴)은 둘 다 보낸다.
     """
 
     async def check_config(self) -> None:

@@ -34,7 +34,7 @@ pillbbox 앱의 사진을 모아 탐지 모델을 개선하고, 약·복용 기�
 [휴대폰 브라우저 / 앱]  https://www.<도메인>의 웹 앱. SampleUploader(사진), ServerBackupService(백업)
         │ HTTPS
         ▼
-[Cloudflare]  https://pillbbox-api.<도메인>   Cloudflare Tunnel
+[Cloudflare]  https://www.<도메인>, https://api.<도메인>   Cloudflare Tunnel
         │ 터널 (맥미니의 cloudflared가 바깥으로 연결해 둠)
         ▼
 [맥미니]  cloudflared
@@ -308,28 +308,63 @@ ssh-keygen -t ed25519 -f ~/pillbbox-deploy -N "" -C pillbbox-deploy
 cat ~/pillbbox-deploy.pub >> ~/.ssh/authorized_keys
 # ~/pillbbox-deploy(비밀 키)를 저장소 secrets의 MAC_MINI_SSH_KEY에 넣고 파일은 지움
 
-# 5. 바깥에 HTTPS로 공개: Cloudflare Tunnel에 호스트 이름 추가 (아래)
-curl https://pillbbox-api.<도메인>/health
+# 호스트 키 지문. appleboy/ssh-action은 ECDSA 호스트 키를 먼저 고르므로 ED25519가 아니라 ECDSA 지문을 넣는다.
+# 출력의 "SHA256:…"을 앞머리까지 그대로 MAC_MINI_SSH_FINGERPRINT에 넣음. 맥미니를 다시 설치하면 바뀜
+ssh-keygen -lf /etc/ssh/ssh_host_ecdsa_key.pub
+
+# 5. 바깥에 HTTPS로 공개: Cloudflare Tunnel에 호스트 이름 추가, HTTPS 마무리 (아래)
+curl https://api.<도메인>/health
 ```
 
-맥미니에는 다른 프로젝트용으로 만든 터널이 이미 있습니다. 터널 하나에 호스트 이름을 여러 개 둘 수 있으므로, 새 터널을 만들지 않고 그 터널에 `pillbbox-api.<도메인>`만 더합니다. 기존 호스트 이름은 건드리지 않습니다. 터널을 어떻게 만들었는지에 따라 더하는 방법이 다릅니다.
+#### 터널에 호스트 이름 더하기
 
-- **대시보드에서 만든 터널**(`cloudflared service install <토큰>`으로 설치): Cloudflare Zero Trust → Networks → Tunnels → 그 터널 → Public Hostname 추가. 호스트 이름 `pillbbox-api.<도메인>`, 서비스 `http://localhost:8100`. 맥미니에서 할 일은 없습니다.
-- **설정 파일로 만든 터널**(`~/.cloudflared/config.yml`): `ingress`의 맨 끝(`service: http_status:404`) **앞에** 한 줄을 더하고, DNS를 잇고, cloudflared를 다시 띄웁니다.
+맥미니에는 다른 프로젝트용으로 만든 터널이 이미 있습니다. 터널 하나에 호스트 이름을 여러 개 둘 수 있으므로, 새 터널을 만들지 않고 그 터널에 두 개만 더합니다. 기존 호스트 이름은 건드리지 않습니다.
+
+| 호스트 이름 | 서비스 |
+|---|---|
+| `www.<도메인>` | `http://localhost:8200` (웹, `com.pillbbox.web`) |
+| `api.<도메인>` | `http://localhost:8100` (API, `com.pillbbox.api`) |
+
+터널을 어떻게 만들었는지에 따라 더하는 방법이 다릅니다. 어느 쪽인지는 맥미니에서 `ls ~/.cloudflared/`에 `config.yml`이 있는지로 압니다.
+
+- **대시보드에서 만든 터널**(`cloudflared service install <토큰>`으로 설치): Cloudflare Zero Trust → Networks → Tunnels → 그 터널 → Public Hostname에서 위 두 줄을 하나씩 추가. DNS 레코드는 저절로 생기고, 맥미니에서 할 일은 없습니다.
+- **설정 파일로 만든 터널**(`~/.cloudflared/config.yml`): `ingress`의 맨 끝(`service: http_status:404`) **앞에** 두 항목을 더하고, DNS를 잇고, cloudflared를 다시 띄웁니다.
 
   ```yaml
   ingress:
-    - hostname: pillbbox-api.<도메인>
+    - hostname: www.<도메인>
+      service: http://localhost:8200
+    - hostname: api.<도메인>
       service: http://localhost:8100
     # … 이미 있는 항목들
     - service: http_status:404
   ```
 
   ```bash
-  cloudflared tunnel route dns <터널 이름> pillbbox-api.<도메인>
+  cloudflared tunnel route dns <터널 이름> www.<도메인>
+  cloudflared tunnel route dns <터널 이름> api.<도메인>
   ```
 
-어느 쪽인지는 맥미니에서 `ls ~/.cloudflared/`에 `config.yml`이 있는지로 압니다.
+인증서는 Cloudflare가 `<도메인>`과 `*.<도메인>`에 저절로 붙입니다. 맥미니와 Cloudflare 사이는 터널이 감싸므로 맥미니에서 인증서를 만들 필요가 없습니다.
+
+#### HTTPS 마무리 (Cloudflare 대시보드, 처음 한 번)
+
+터널만 붙이면 `https://`는 되지만 `http://`로 들어와도 그대로 보여 주고, 앞에 아무것도 없는 `<도메인>`은 열리지 않습니다. 대시보드에서 그 도메인을 골라 아래 셋을 합니다.
+
+1. **http를 https로 보내기**: SSL/TLS → Edge Certificates → **Always Use HTTPS** 켬. 같은 화면의 Minimum TLS Version은 `TLS 1.2`.
+2. **`<도메인>`을 `www.<도메인>`으로 보내기**: 리다이렉트 규칙은 Cloudflare 프록시를 지나는 주소에만 걸리므로, 가짜 레코드를 하나 만든 뒤 규칙을 둡니다.
+   - DNS → Records → Add record: Type `AAAA`, Name `@`, IPv6 `100::`, Proxy status **Proxied**(주황 구름). `100::`은 아무 데도 가지 않는 주소이고, 요청은 그 전에 Cloudflare가 리다이렉트합니다.
+   - Rules → Redirect Rules → Create rule: When incoming requests match → Custom filter expression, Field `Hostname` equals `<도메인>`. Then → Type `Dynamic`, Expression `concat("https://www.<도메인>", http.request.uri.path)`, Status code `301`, **Preserve query string** 켬.
+3. **HSTS**(선택): SSL/TLS → Edge Certificates → HTTP Strict Transport Security → Enable. 처음에는 Max Age `1 month`, `includeSubDomains`와 Preload는 끔. 켜 두면 브라우저가 그 기간 동안 http로 들어가지 않으므로, 몇 주 문제없이 쓴 뒤에 늘립니다. 이 도메인에 HTTPS가 아닌 하위 도메인을 둘 계획이 없을 때만 `includeSubDomains`를 켭니다.
+
+확인 (몇 분 걸릴 수 있음):
+
+```bash
+curl -sI http://www.<도메인>/ | grep -i -E '^HTTP|^location'     # 301, location: https://www.<도메인>/
+curl -sI 'https://<도메인>/foo?a=1' | grep -i -E '^HTTP|^location' # 301, location: https://www.<도메인>/foo?a=1
+curl -sI https://www.<도메인>/ | grep -i strict-transport         # HSTS를 켰으면 보임
+curl -s https://api.<도메인>/health                               # {"status":"ok","commit":"…"}
+```
 
 - 배포용 클론은 개발용과 따로 둡니다. 워크플로가 `git pull --ff-only`로 맞추므로 여기서 코드를 고치지 않습니다. 고치면 다음 배포가 실패합니다.
 - DB·사진·`.env`·로그는 클론 밖(`~/srv/pillbbox-data/`)에 둡니다. 클론을 지우고 다시 받아도 데이터는 남습니다.
@@ -387,6 +422,7 @@ jobs:
           host: ${{ secrets.MAC_MINI_IP }}
           username: ${{ secrets.MAC_MINI_USERNAME }}
           key: ${{ secrets.MAC_MINI_SSH_KEY }}
+          fingerprint: ${{ secrets.MAC_MINI_SSH_FINGERPRINT }}
           port: 2222
           command_timeout: 5m
           # git pull을 먼저 끝내고 스크립트를 부른다. 실행 중인 스크립트 파일을 pull로 바꾸지 않기 위해서다
@@ -401,7 +437,7 @@ jobs:
             bash backend/deploy/deploy.sh
 ```
 
-- secrets는 셋입니다: `MAC_MINI_IP`, `MAC_MINI_USERNAME`, `MAC_MINI_SSH_KEY`. 키는 5.2의 배포 전용 키입니다. 집 IP가 바뀌면 `MAC_MINI_IP`도 바꿔야 하니, 고정 IP가 아니면 DDNS 주소를 넣습니다.
+- secrets는 넷입니다: `MAC_MINI_IP`, `MAC_MINI_USERNAME`, `MAC_MINI_SSH_KEY`, `MAC_MINI_SSH_FINGERPRINT`. 키와 지문은 5.2의 배포 전용 키와 ECDSA 호스트 키 지문입니다. 집 IP가 바뀌면 `MAC_MINI_IP`도 바꿔야 하니, 고정 IP가 아니면 DDNS 주소를 넣습니다.
 
 `deploy.sh`가 하는 일:
 
@@ -418,9 +454,11 @@ jobs:
 
 | 워크플로 | 바꿀 것 |
 |---|---|
-| `backend.yml` (새로) | `backend/**`가 바뀐 PR과 `main` push에서 `uv sync --frozen`, `uv run ruff check`, `uv run pytest`. 웹 배포는 `frontend/**`가 바뀔 때만 돌아 서로 건드리지 않음 |
-| `deploy-backend.yml` (새로) | 5.3. `main`에 `backend/**`가 합쳐지면 맥미니에 배포 |
-| `deploy-web.yml` | 빌드에 `--dart-define=API_BASE_URL=${{ vars.API_BASE_URL }}`. 주소는 저장소 Variables에 둠 |
+| `backend.yml` | 모든 PR과 `main` push에서 돌고, `backend/**`가 바뀌었을 때만 `backend-check` job이 `ruff check`, `ruff format --check`, `pytest`를 돌림. main의 필수 체크 |
+| `deploy-backend.yml` | 5.3. `main`에 `backend/**`가 합쳐지면 같은 검사를 다시 하고 맥미니에 배포. 끝나면 바깥 `API_BASE_URL/health`가 이 커밋인지 확인 |
+| `deploy-web.yml` | `frontend/**`가 바뀌었을 때만 `web-build`(필수 체크)와 배포. 빌드에 `--dart-define=API_BASE_URL=${{ vars.API_BASE_URL }}`, 배포 뒤 바깥 `WEB_BASE_URL/commit.txt`와 COOP/COEP 확인 |
+
+검증 시나리오와 결과는 [docs/CICD.md](../docs/CICD.md)에 있습니다.
 
 ### 5.5 데이터 백업
 
@@ -469,7 +507,7 @@ fvm flutter run -d chrome --web-port 8080 --dart-define=API_BASE_URL=http://loca
 | 2 | 보관함, `POST`/`DELETE /v1/samples`, `export_yolo.py` | 테스트: 코드 없이 401, 같은 `id`를 두 번 올려도 한 장, 지우면 파일도 지워짐, EXIF가 남지 않음 |
 | 3 | `GET`/`PUT /v1/backup`, 412 | 테스트: 리비전이 어긋나면 412, 리비전 10개만 남음 |
 | 4 | 앱: 박스별 결과, 동의 화면, `SampleUploader` | 로컬 서버에 붙여 웹에서 찍은 사진과 바꾼 약이 쌓임 |
-| 5 (나중) | 맥미니 배포: launchd, 터널 호스트 이름과 도메인, `deploy.sh`, `deploy-backend.yml` | `main`에 합치면 워크플로가 끝날 때 `https://pillbbox-api.<도메인>/health`가 새 커밋을 보여 줌. 일부러 깨뜨린 커밋은 되돌려지고 워크플로가 실패 |
+| 5 (나중) | 맥미니 배포: launchd, 터널 호스트 이름과 도메인, `deploy.sh`, `deploy-backend.yml` | `main`에 합치면 워크플로가 끝날 때 `https://api.<도메인>/health`가 새 커밋을 보여 줌. 일부러 깨뜨린 커밋은 되돌려지고 워크플로가 실패 |
 | 6 | 휴대폰 평가 세트 먼저, 검수(박스 포함), 학습 | 모은 사진을 더해 학습한 모델이, 보관함 단위로 떼어 둔 휴대폰 평가 세트에서 mAP75-95와 그대로 저장한 비율 모두 지금 모델보다 나음. 지금 모델의 휴대폰 점수를 먼저 잼 |
 | 7 | 앱: `exportSnapshot`/`importSnapshot`, `ServerBackupService`, 자동 올리기 | 웹에서 기록 → 사이트 데이터 지우기 → 코드 입력 → 기록이 돌아옴 |
 | 8 (나중) | 2단계 동기화 (3.4), 서버 추론 (4.6) | 필요해졌을 때 |
@@ -485,6 +523,6 @@ API(1~3)와 앱(4)은 로컬 서버로 먼저 만들고, 맥미니 배포와 도
 | 사진 보관 기간 | 1년. 검수해 학습 데이터로 옮긴 사진은 모델 저장소 규칙을 따름 | 팀 |
 | 수집 동의 문구 | 4.3의 항목. 팀 밖 사람에게 열기 전에 개인정보 처리방침과 민감정보 동의가 법에 맞는지 확인 | 팀 |
 | 검수 도구 | 처음에는 내보낸 폴더를 직접 봄. 많아지면 Label Studio 같은 도구 | 모델 팀 |
-| 바깥 공개 방법 | 맥미니의 기존 Cloudflare Tunnel에 `pillbbox-api.<도메인>` 추가. 그 터널을 지우거나 옮기면 이 서버도 끊기므로, 다른 프로젝트와 따로 관리하고 싶으면 이 저장소용 터널을 새로 만듦(cloudflared 하나로 터널 둘을 돌릴 수 있음). 도메인은 터널과 같은 Cloudflare 계정에 있어야 함 | 팀 |
+| 바깥 공개 방법 | 맥미니의 기존 Cloudflare Tunnel에 `www.<도메인>`, `api.<도메인>` 추가. 그 터널을 지우거나 옮기면 이 서버도 끊기므로, 다른 프로젝트와 따로 관리하고 싶으면 이 저장소용 터널을 새로 만듦(cloudflared 하나로 터널 둘을 돌릴 수 있음). 도메인은 터널과 같은 Cloudflare 계정에 있어야 함 | 팀 |
 | 건강 정보 보관 | 맥미니 FileVault + 코드 해시만 저장. 서버 데이터는 암호화하지 않음. 백업은 필요하면 앱에서 코드로 암호화해 올릴 수 있음(종단 간 암호화). 사진은 학습에 써야 하므로 서버가 읽을 수 있어야 함. Cloudflare Tunnel은 Cloudflare에서 HTTPS를 풀었다가 다시 감싸므로, 사진과 백업이 Cloudflare를 지남. 수집 동의 화면의 "어디에"에 적음 | 팀 |
 | 엑셀 백업을 남길지 | 남김. 서버 없이도 쓸 수 있고, 서버를 내려도 데이터를 옮길 수 있음 | 팀 |

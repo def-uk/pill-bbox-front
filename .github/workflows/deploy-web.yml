@@ -1,15 +1,16 @@
 # 웹 빌드를 맥미니에 올린다 (docs/DESIGN.md 6장). PR에서는 빌드만 확인한다.
 # 맥미니의 com.pillbbox.web(app/web.py)이 내보내고, Cloudflare Tunnel이 www.<도메인>을 그쪽으로 잇는다.
 # 필요한 secrets: MAC_MINI_IP, MAC_MINI_USERNAME, MAC_MINI_SSH_KEY, MAC_MINI_SSH_FINGERPRINT
-# 필요한 variables: API_BASE_URL (https://api.<도메인>)
+# 배포 뒤 바깥 주소(www.<도메인>)가 이 커밋의 빌드를 내보내는지 본다 (.github/scripts/smoke.sh).
+# main ruleset의 필수 체크(web-build)라서 모든 PR에서 돈다. frontend/를 건드리지 않았으면 빌드와 배포를 건너뛴다.
+# on:에 paths를 걸면 워크플로가 아예 돌지 않아 필수 체크가 영영 대기로 남는다.
+# 필요한 variables: API_BASE_URL (https://api.<도메인>), WEB_BASE_URL (https://www.<도메인>)
 name: 웹 배포
 
 on:
   push:
     branches: [main]
-    paths: [frontend/**, .github/workflows/deploy-web.yml]
   pull_request:
-    paths: [frontend/**, .github/workflows/deploy-web.yml]
   workflow_dispatch:
 
 permissions:
@@ -20,7 +21,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      # 손으로 돌리면(workflow_dispatch) 바뀐 게 없어도 빌드하고 배포한다
+      frontend: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.frontend == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/deploy-web.yml'
+              - '.github/scripts/smoke.sh'
+
   build:
+    name: web-build
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -65,6 +89,9 @@ jobs:
       - run: >-
           flutter build web --release --base-href /
           --dart-define=API_BASE_URL=${{ vars.API_BASE_URL }}
+
+      # 배포 뒤 바깥에서 이 빌드가 나가는지 확인하는 표식 (.github/scripts/smoke.sh)
+      - run: echo "${{ github.sha }}" > build/web/commit.txt
 
       - name: 빌드 묶기
         if: github.event_name != 'pull_request'
@@ -123,4 +150,17 @@ jobs:
             ln -sfn "$release" "$web/current"
             # 최근 3개만 남긴다. 되돌릴 때는 current를 이전 폴더로 바꾼다
             ls -1dt "$web"/releases/*/ | tail -n +4 | xargs rm -rf
-            curl -s -o /dev/null -w "웹 서버 응답: %{http_code}\n" http://127.0.0.1:8200/ || echo "웹 서버(com.pillbbox.web)가 아직 없습니다. 백엔드 배포를 먼저 하세요"
+            # 웹 서버(com.pillbbox.web)가 새 빌드를 내보내는지 본다. 아니면 배포를 실패로 끝낸다
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8200/ || true)
+            echo "웹 서버 응답: $code"
+            if [ "$code" != 200 ]; then
+              echo "웹 서버(com.pillbbox.web)가 200으로 답하지 않습니다. 처음이면 백엔드 배포를 먼저 하세요" >&2
+              exit 1
+            fi
+
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: 바깥에서 확인 (www.<도메인>)
+        run: .github/scripts/smoke.sh web "${{ vars.WEB_BASE_URL }}" "${{ github.sha }}"
