@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../../data/models/pill_label.dart';
 import '../../utils/time_format.dart';
 import '../common/medication_picker.dart';
+import '../common/theme.dart';
+import '../common/widgets.dart';
 import 'medication_edit_view_model.dart';
 
 class MedicationEditScreen extends StatelessWidget {
@@ -64,40 +66,48 @@ class MedicationEditScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(vm.isNew ? '약 등록' : '약 수정'),
+        actionsPadding: EdgeInsets.only(right: gutterOf(context) - 12),
         actions: [
           if (!vm.isNew && !vm.loading && !vm.notFound)
-            IconButton(
-              tooltip: '약 삭제',
+            TextButton(
+              style: destructiveTextButtonStyle,
               onPressed: vm.saving ? null : delete,
-              icon: const Icon(Icons.delete),
+              child: const Text('삭제'),
             ),
         ],
       ),
       body: switch (vm) {
-        MedicationEditViewModel(loading: true) => const Center(
-          child: CircularProgressIndicator(),
-        ),
-        MedicationEditViewModel(notFound: true) => const Center(
-          child: Text('지워진 약입니다'),
+        MedicationEditViewModel(loading: true) => const LoadingState(),
+        MedicationEditViewModel(notFound: true) => const EmptyState(
+          icon: Icons.medication_rounded,
+          title: '지워진 약입니다',
         ),
         _ => ListView(
-          padding: const EdgeInsets.all(16),
+          padding: pagePadding(context),
           children: [
-            Text('약', style: textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Card.outlined(
-              child: ListTile(
-                title: Text(vm.name.isEmpty ? '약을 고르세요' : vm.name),
-                subtitle: vm.name.isEmpty
-                    ? null
-                    : Text(
-                        vm.categoryId == null
-                            ? '직접 입력 · 사진으로 인식되지 않아 직접 기록만 됩니다'
-                            : '사진으로 인식되는 약',
-                      ),
-                trailing: const Icon(Icons.search),
-                onTap: pickLabel,
-              ),
+            const SectionLabel('약', first: true),
+            GroupCard(
+              children: [
+                ListTile(
+                  title: Text(
+                    vm.name.isEmpty ? '약을 고르세요' : vm.name,
+                    style: vm.name.isEmpty
+                        ? textTheme.titleMedium?.copyWith(
+                            color: AppColors.inkMuted,
+                          )
+                        : null,
+                  ),
+                  subtitle: vm.name.isEmpty
+                      ? null
+                      : Text(
+                          vm.categoryId == null
+                              ? '직접 입력 · 사진으로 인식되지 않아 직접 기록만 됩니다'
+                              : '사진으로 인식되는 약',
+                        ),
+                  trailing: const Icon(Icons.search_rounded),
+                  onTap: pickLabel,
+                ),
+              ],
             ),
             Align(
               alignment: Alignment.centerRight,
@@ -106,42 +116,62 @@ class MedicationEditScreen extends StatelessWidget {
                 child: const Text('목록에 없는 약 직접 입력'),
               ),
             ),
-            const SizedBox(height: 16),
-            Text('1회 수량', style: textTheme.titleMedium),
-            Row(
+            const SectionLabel('1회 수량'),
+            GroupCard(
               children: [
-                IconButton(
-                  tooltip: '1정 줄이기',
-                  onPressed: vm.dosePerTake > 1
-                      ? () => vm.setDose(vm.dosePerTake - 1)
-                      : null,
-                  icon: const Icon(Icons.remove_circle_outline),
-                ),
-                Text('${vm.dosePerTake}정', style: textTheme.titleLarge),
-                IconButton(
-                  tooltip: '1정 늘리기',
-                  onPressed: () => vm.setDose(vm.dosePerTake + 1),
-                  icon: const Icon(Icons.add_circle_outline),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.gutter,
+                    AppSpacing.sm,
+                    AppSpacing.sm,
+                    AppSpacing.sm,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text('한 번에 먹는 개수', style: textTheme.bodyLarge),
+                      ),
+                      CountStepper(
+                        label: '${vm.dosePerTake}정',
+                        decrementTooltip: '1정 줄이기',
+                        incrementTooltip: '1정 늘리기',
+                        onDecrement: vm.dosePerTake > 1
+                            ? () => vm.setDose(vm.dosePerTake - 1)
+                            : null,
+                        onIncrement: () => vm.setDose(vm.dosePerTake + 1),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Text('복용 시간', style: textTheme.titleMedium),
-            const SizedBox(height: 8),
+            const SectionLabel('복용 시간'),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
               children: [
                 for (final time in vm.times)
                   InputChip(
-                    label: Text(formatMinuteOfDay(time)),
+                    label: Text(
+                      formatMinuteOfDay(time),
+                      style: const TextStyle(
+                        fontFeatures: AppTypography.tabular,
+                      ),
+                    ),
+                    deleteIcon: const Icon(Icons.close_rounded, size: 18),
                     deleteButtonTooltipMessage:
                         '${formatMinuteOfDay(time)} 지우기',
                     onDeleted: () => vm.removeTime(time),
                   ),
                 ActionChip(
-                  avatar: const Icon(Icons.add),
-                  label: const Text('시간 추가'),
+                  avatar: const Icon(
+                    Icons.add_rounded,
+                    color: AppColors.primary,
+                  ),
+                  label: const Text(
+                    '시간 추가',
+                    style: TextStyle(color: AppColors.primary),
+                  ),
                   onPressed: addTime,
                 ),
               ],
@@ -149,14 +179,15 @@ class MedicationEditScreen extends StatelessWidget {
           ],
         ),
       },
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: FilledButton(
-            onPressed: vm.canSave ? save : null,
-            child: const Text('저장'),
+      bottomNavigationBar: BottomActionBar(
+        children: [
+          Expanded(
+            child: FilledButton(
+              onPressed: vm.canSave ? save : null,
+              child: const Text('저장'),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -184,22 +215,25 @@ class _LabelSearchSheetState extends State<_LabelSearchSheet> {
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.75,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const SheetTitle('약 고르기'),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.gutter,
+              ),
+              child: SearchField(
                 autofocus: true,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: '약 이름 검색',
-                ),
+                hintText: '약 이름 검색',
                 onChanged: (value) => setState(() => _query = value.trim()),
               ),
             ),
+            const SizedBox(height: AppSpacing.xs),
             Expanded(
               child: matches.isEmpty
                   ? const Center(child: Text('찾는 약이 없습니다'))
                   : ListView(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
                       children: [
                         for (final l in matches)
                           ListTile(
