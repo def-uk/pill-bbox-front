@@ -57,3 +57,4 @@ fvm flutter test
 | 문서 | 내용 |
 |---|---|
 | [docs/DESIGN.md](docs/DESIGN.md) | 목적, 범위, 모델 연동, 화면, 아키텍처, 배포, 개발 순서 |
+| [backend/README.md](backend/README.md) | 백엔드(FastAPI) 설계: 서버 백업 API, 맥미니 배포 |
