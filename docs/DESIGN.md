@@ -189,6 +189,8 @@ View (Widget) ──▶ ViewModel (ChangeNotifier) ──▶ Repository ──�
 
 ### 5.1 폴더 구조
 
+앱은 저장소의 `frontend/`에 있습니다. 이 문서의 앱 경로는 모두 `frontend/` 기준입니다.
+
 ```text
 lib/
 ├── main.dart                 # provider 등록, 앱 시작
@@ -272,6 +274,7 @@ web/pill_detector.js          # 웹 탐지 (onnxruntime-web)
 ### 6.3 로컬에서 웹 확인
 
 ```bash
+cd frontend
 scripts/fetch_model.sh
 fvm dart run sqflite_common_ffi_web:setup
 fvm flutter run -d chrome

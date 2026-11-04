@@ -20,9 +20,10 @@ git switch -c feat/작업-이름
 
 ## 실행
 
-Flutter 버전은 fvm으로 고정합니다(`.fvmrc`). `flutter` 대신 `fvm flutter`를 씁니다.
+Flutter 앱은 `frontend/`에 있습니다. 아래 명령과 이 문서의 앱 경로(`lib/`, `scripts/` 등)는 모두 `frontend/` 기준입니다. Flutter 버전은 fvm으로 고정합니다(`frontend/.fvmrc`). `flutter` 대신 `fvm flutter`를 씁니다.
 
 ```bash
+cd frontend
 fvm flutter run
 fvm flutter run -d chrome   # 웹. 처음 한 번 fvm dart run sqflite_common_ffi_web:setup
 fvm flutter test
@@ -33,7 +34,13 @@ fvm flutter analyze
 
 ## 구조
 
-MVVM입니다 (View, ViewModel, Repository, Service).
+```text
+frontend/   Flutter 앱 (웹, Android, iOS)
+backend/    서버 (backend/README.md)
+docs/       설계 문서
+```
+
+앱은 MVVM입니다 (View, ViewModel, Repository, Service).
 
 - `lib/ui/` 화면별 View와 ViewModel, `router.dart`(go_router)
 - `lib/data/models/` 모델, `lib/data/repositories/` 저장소, `lib/data/services/` 탐지·사진 선택(image_picker)·DB(sqflite) 등 서비스

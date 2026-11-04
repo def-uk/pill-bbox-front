@@ -9,9 +9,10 @@
 
 ## 실행
 
-Flutter 버전은 [fvm](https://fvm.app)으로 고정합니다(`.fvmrc`).
+앱은 `frontend/`에 있습니다. Flutter 버전은 [fvm](https://fvm.app)으로 고정합니다(`frontend/.fvmrc`).
 
 ```bash
+cd frontend
 fvm install
 scripts/fetch_model.sh
 fvm flutter run
