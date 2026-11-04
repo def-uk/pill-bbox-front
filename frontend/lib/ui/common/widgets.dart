@@ -250,11 +250,13 @@ class SearchField extends StatelessWidget {
     super.key,
     required this.hintText,
     required this.onChanged,
+    this.onSubmitted,
     this.autofocus = false,
   });
 
   final String hintText;
   final ValueChanged<String> onChanged;
+  final ValueChanged<String>? onSubmitted;
   final bool autofocus;
 
   static OutlineInputBorder _border(BorderSide side) => OutlineInputBorder(
@@ -267,6 +269,8 @@ class SearchField extends StatelessWidget {
     return TextField(
       autofocus: autofocus,
       onChanged: onChanged,
+      onSubmitted: onSubmitted,
+      textInputAction: onSubmitted == null ? null : TextInputAction.search,
       decoration: InputDecoration(
         hintText: hintText,
         fillColor: AppColors.surfaceSunken,

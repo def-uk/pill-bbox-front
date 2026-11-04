@@ -41,6 +41,8 @@ EOF
   fi
   # 예전에 만든 .env에는 웹 폴더가 없다.
   grep -q '^PILLBBOX_WEB_DIR=' "$data/.env" || echo "PILLBBOX_WEB_DIR=$data/web/current" >> "$data/.env"
+  # 약 정보 인증키. 비어 있으면 약 찾기만 꺼지고 서버는 뜬다 (README 3.5).
+  grep -q '^PILLBBOX_MFDS_SERVICE_KEY=' "$data/.env" || echo "PILLBBOX_MFDS_SERVICE_KEY=" >> "$data/.env"
   # 따옴표 없는 값에 공백이 있으면 uv가 .env를 읽다 멈춰 PILLBBOX_COMMIT까지 빠진다. 띄우기 전에 막는다.
   local bad
   if bad="$(grep -nE '^[A-Za-z_][A-Za-z0-9_]*=[^"'\''[:space:]]*[[:space:]]+[^#[:space:]]' "$data/.env")"; then

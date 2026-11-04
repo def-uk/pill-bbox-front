@@ -10,6 +10,8 @@ import 'history/history_screen.dart';
 import 'history/history_view_model.dart';
 import 'home/home_screen.dart';
 import 'home/home_view_model.dart';
+import 'medication/drug_info_screen.dart';
+import 'medication/drug_info_view_model.dart';
 import 'medication/medication_edit_screen.dart';
 import 'medication/medication_edit_view_model.dart';
 import 'medication/medication_list_screen.dart';
@@ -61,6 +63,7 @@ GoRouter buildRouter() => GoRouter(
             create: (context) => MedicationEditViewModel(
               medications: context.read(),
               labels: context.read(),
+              drugs: context.read(),
             )..load(),
             child: const MedicationEditScreen(),
           ),
@@ -75,10 +78,24 @@ GoRouter buildRouter() => GoRouter(
             create: (context) => MedicationEditViewModel(
               medications: context.read(),
               labels: context.read(),
+              drugs: context.read(),
               medicationId: int.parse(state.pathParameters['id']!),
             )..load(),
             child: const MedicationEditScreen(),
           ),
+          routes: [
+            GoRoute(
+              path: 'info',
+              builder: (context, state) => ChangeNotifierProvider(
+                create: (context) => DrugInfoViewModel(
+                  medicationId: int.parse(state.pathParameters['id']!),
+                  medications: context.read(),
+                  drugs: context.read(),
+                )..load(),
+                child: const DrugInfoScreen(),
+              ),
+            ),
+          ],
         ),
       ],
     ),

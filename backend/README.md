@@ -73,6 +73,9 @@ pillbbox 앱의 사진을 모아 탐지 모델을 개선하고, 약·복용 기�
 | `POST` | `/v1/samples` | 코드 | 사진 한 장과 라벨을 올림 (4.2). 같은 `id`를 다시 올리면 그대로 200 |
 | `DELETE` | `/v1/samples` | 코드 | 이 보관함이 올린 사진을 모두 지움 |
 | `DELETE` | `/v1/vaults/me` | 코드 | 보관함, 백업, 사진을 모두 지움 |
+| `GET` | `/v1/drugs?q=<이름>&page=1` | 없음 | 식약처 의약품을 이름으로 찾음 (3.5). 한 쪽에 20개 |
+| `GET` | `/v1/drugs/{item_seq}` | 없음 | 약 정보: 생김새와 복약 정보. 식약처에 없으면 404 |
+| `GET` | `/v1/drugs/{item_seq}/image` | 없음 | 낱알 사진. 없으면 404 |
 
 ### 3.1 동기화 코드
 
@@ -136,6 +139,21 @@ pillbbox 앱의 사진을 모아 탐지 모델을 개선하고, 약·복용 기�
 | 앱 DB | 모든 행에 `uid`(UUID), `updated_at`, `deleted_at`. 지우면 행을 남기고 `deleted_at`만 적음 (DB 버전 3) |
 | API | `POST /v2/sync {cursor, changes}` → 서버가 `cursor` 이후 바뀐 행을 돌려줌. 같은 `uid`끼리는 `updated_at`이 늦은 쪽이 이김 |
 | 서버 DB | 백업 JSON 대신 테이블별로 저장. 이때 Alembic을 넣음 |
+
+### 3.5 약 정보 (식약처 공공데이터)
+
+모델이 아는 96종 밖의 약도 이름으로 찾아 등록하고, 효능·주의사항·생김새를 보여 주려고 식약처 공공데이터포털 API 두 개를 대신 부릅니다. 인증키를 앱에 넣지 않으려고 서버를 거칩니다(`app/drugs.py`, `app/mfds.py`).
+
+| API | 쓰는 곳 | 활용신청 |
+|---|---|---|
+| 의약품 낱알식별 정보 (`MdcinGrnIdntfcInfoService03`) | 이름으로 찾기, 모양·색·각인·크기·사진 | https://www.data.go.kr/data/15057639/openapi.do |
+| 의약품개요정보 e약은요 (`DrbEasyDrugInfoService`) | 효능, 사용법, 주의사항, 상호작용, 부작용, 보관법 | https://www.data.go.kr/data/15075057/openapi.do |
+
+- 두 API는 품목기준코드(`item_seq`)로 잇습니다. e약은요에는 주로 일반의약품만 있어, 전문의약품은 생김새만 나오고 `guide`가 `null`입니다.
+- 인증키는 공공데이터포털 마이페이지의 **일반 인증키(Decoding)**를 `PILLBBOX_MFDS_SERVICE_KEY`에 넣습니다. 비어 있으면 `/v1/drugs`는 503이고 다른 API는 그대로 돕니다.
+- 같은 질문은 24시간 메모리에 캐시하고, 캐시에 없어 식약처를 부르는 횟수는 서버 전체에서 시간당 1,000번(`PILLBBOX_DRUG_CALLS_PER_HOUR`)으로 막습니다. 넘으면 429, 식약처가 답하지 않으면 502입니다.
+- 웹은 교차 출처 격리(COEP `require-corp`)를 켜서 의약품안전나라의 사진을 바로 읽지 못합니다. 그래서 사진도 서버가 받아 `Cross-Origin-Resource-Policy: cross-origin`을 붙여 돌려줍니다. 응답에 든 주소라도 `nedrug.mfds.go.kr` 밖으로는 받지 않습니다.
+- 약학정보원(health.kr)은 공식 오픈 API가 없어 쓰지 않습니다. 사이트 내부 주소를 부르는 방식은 예고 없이 바뀌고 이용 조건도 없습니다. 출처를 `DrugInfoSource`로 감싸 두었으므로, 정식으로 쓸 수 있게 되면 구현만 더하면 됩니다.
 
 ## 4. 사진 수집
 
@@ -290,6 +308,7 @@ DB 테이블은 셋입니다.
 | `PILLBBOX_SAMPLES_DIR` | `/Users/<사용자>/srv/pillbbox-data/data/samples` | 모은 사진 |
 | `PILLBBOX_CORS_ORIGINS` | `https://www.<도메인>,http://localhost:8080` | 부를 수 있는 웹 주소. 경로 없이 scheme + host |
 | `PILLBBOX_COMMIT` | (deploy.sh가 넣음) | `/health`에 보여 줄 커밋 |
+| `PILLBBOX_MFDS_SERVICE_KEY` | (공공데이터포털 일반 인증키, Decoding) | 약 찾기·약 정보 (3.5). 비우면 꺼짐 |
 
 ### 5.2 맥미니 준비 (처음 한 번)
 

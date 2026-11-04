@@ -142,3 +142,47 @@ class SampleSaved(_Model):
 
 class Deleted(_Model):
     deleted: int
+
+
+# 약 정보 (backend/README.md 3.5). 식약처 공공데이터를 앱에 맞게 줄여 옮긴다.
+
+
+class DrugSummary(_Model):
+    item_seq: str = Field(description="품목기준코드")
+    name: str
+    company: str | None = None
+    otc: str | None = Field(None, description="전문의약품 / 일반의약품")
+    shape: str | None = None
+    colors: list[str] = []
+    print_front: str | None = None
+    print_back: str | None = None
+    has_image: bool = Field(False, description="GET /v1/drugs/{item_seq}/image로 받는다")
+
+
+class DrugPage(_Model):
+    total: int
+    page: int
+    items: list[DrugSummary]
+
+
+class DrugGuide(_Model):
+    """e약은요. 주로 일반의약품만 있다."""
+
+    efficacy: str | None = None
+    usage: str | None = None
+    warning: str | None = None
+    caution: str | None = None
+    interaction: str | None = None
+    side_effect: str | None = None
+    storage: str | None = None
+    updated_on: str | None = None
+
+
+class DrugDetail(DrugSummary):
+    chart: str | None = Field(None, description="성상")
+    form: str | None = Field(None, description="제형")
+    class_name: str | None = Field(None, description="분류")
+    length_long: float | None = Field(None, description="mm")
+    length_short: float | None = None
+    thickness: float | None = None
+    guide: DrugGuide | None = None
