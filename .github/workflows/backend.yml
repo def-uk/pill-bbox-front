@@ -1,0 +1,35 @@
+# 백엔드(backend/)를 검사한다 (backend/README.md 5.4). 배포는 deploy-backend.yml이 따로 맡는다.
+name: 백엔드
+
+on:
+  push:
+    branches: [main]
+    paths: [backend/**, .github/workflows/backend.yml]
+  pull_request:
+    paths: [backend/**, .github/workflows/backend.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest -q
