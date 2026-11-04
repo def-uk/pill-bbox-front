@@ -37,10 +37,16 @@ PILLBBOX_SAMPLES_DIR=$data/data/samples
 PILLBBOX_CORS_ORIGINS=http://localhost:8080
 PILLBBOX_COMMIT=
 EOF
-    log ".env를 만들었습니다: $data/.env. 웹 주소(https://www.<도메인>)를 PILLBBOX_CORS_ORIGINS에 넣어 주세요"
+    log ".env를 만들었습니다: $data/.env. 웹 주소(https://www.<도메인>)를 PILLBBOX_CORS_ORIGINS에 쉼표로 띄우지 않고 이어 넣어 주세요"
   fi
   # 예전에 만든 .env에는 웹 폴더가 없다.
   grep -q '^PILLBBOX_WEB_DIR=' "$data/.env" || echo "PILLBBOX_WEB_DIR=$data/web/current" >> "$data/.env"
+  # 따옴표 없는 값에 공백이 있으면 uv가 .env를 읽다 멈춰 PILLBBOX_COMMIT까지 빠진다. 띄우기 전에 막는다.
+  local bad
+  if bad="$(grep -nE '^[A-Za-z_][A-Za-z0-9_]*=[^"'\''[:space:]]*[[:space:]]+[^#[:space:]]' "$data/.env")"; then
+    fail ".env 값에 공백이 있습니다. 쉼표 뒤 공백을 지우거나 값을 따옴표로 감싸 주세요: $data/.env
+$bad"
+  fi
 
   local commit previous
   commit="$(git -C "$repo" rev-parse HEAD)"
