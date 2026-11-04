@@ -31,7 +31,7 @@ pillbbox 앱의 사진을 모아 탐지 모델을 개선하고, 약·복용 기�
 ## 2. 구성
 
 ```text
-[휴대폰 브라우저 / 앱]  GitHub Pages의 웹 앱. SampleUploader(사진), ServerBackupService(백업)
+[휴대폰 브라우저 / 앱]  https://www.<도메인>의 웹 앱. SampleUploader(사진), ServerBackupService(백업)
         │ HTTPS
         ▼
 [Cloudflare]  https://pillbbox-api.<도메인>   Cloudflare Tunnel
@@ -57,7 +57,7 @@ pillbbox 앱의 사진을 모아 탐지 모델을 개선하고, 약·복용 기�
 | 패키지 | [uv](https://docs.astral.sh/uv/) (`uv.lock`으로 고정) | 모델 스크립트에서 이미 씀. 맥미니에서 `uv sync --frozen` 한 줄로 같은 환경 |
 | DB | SQLite + SQLAlchemy 2.0 | 맥미니 한 대라 DB 서버가 필요 없음. 파일 하나라 백업이 쉬움 |
 | 사진 | DB 밖 파일 (`samples/<연-월>/<id>.jpg`) | 장당 약 20KB. 하루 1,000장이어도 20MB |
-| 바깥 공개 | Cloudflare Tunnel (맥미니에 이미 있는 터널에 호스트 이름 추가) | 맥미니에 다른 프로젝트용 터널과 cloudflared가 이미 있음. 공유기 포트를 열지 않고 HTTPS 주소가 생김. GitHub Pages(HTTPS)에서 부르려면 API도 HTTPS여야 함 |
+| 바깥 공개 | Cloudflare Tunnel (맥미니에 이미 있는 터널에 호스트 이름 추가) | 맥미니에 다른 프로젝트용 터널과 cloudflared가 이미 있음. 공유기 포트를 열지 않고 HTTPS 주소가 생김. 웹 앱(HTTPS)에서 부르려면 API도 HTTPS여야 함. `www.<도메인>` → `127.0.0.1:8200`(웹), `api.<도메인>` → `127.0.0.1:8100`(API) |
 | 배포 | `main`에 합치면 GitHub Actions가 SSH로 맥미니에 들어가 `git pull` 후 `deploy.sh` (5장) | 맥미니에 따로 프로그램을 띄워 둘 필요가 없음. GitHub가 제공하는 러너에서 돌고 `main` push에만 돌아, public 저장소여도 PR 코드가 맥미니에서 돌지 않음 |
 
 ## 3. API
@@ -253,6 +253,7 @@ backend/
 ├── .env.example
 ├── app/
 │   ├── main.py             # FastAPI 앱, CORS, 라우터 등록, /health
+│   ├── web.py              # 웹 빌드를 내보내는 서버 (www.<도메인>, 8200)
 │   ├── config.py           # 설정 (pydantic-settings, PILLBBOX_ 접두사 환경 변수)
 │   ├── db.py               # 엔진, 세션, 시작할 때 create_all
 │   ├── models.py           # vaults, backups, samples 테이블
@@ -268,7 +269,7 @@ backend/
 │   ├── test_samples.py     # 사진 올리기·지우기, EXIF, 같은 id
 │   └── test_export_yolo.py
 └── deploy/
-    ├── com.pillbbox.api.plist      # uvicorn을 띄우는 launchd 에이전트
+    ├── launchd.plist               # API(com.pillbbox.api, 8100)와 웹(com.pillbbox.web, 8200) 에이전트의 틀
     ├── deploy.sh                   # 의존성 맞추고 재시작, /health 확인, 실패하면 되돌림
     └── backup-db.sh                # 매일 SQLite 백업
 ```
@@ -287,7 +288,7 @@ DB 테이블은 셋입니다.
 |---|---|---|
 | `PILLBBOX_DATABASE_URL` | `sqlite:////Users/<사용자>/srv/pillbbox-data/data/pillbbox.db` | DB 파일. 코드 폴더 밖에 둠 |
 | `PILLBBOX_SAMPLES_DIR` | `/Users/<사용자>/srv/pillbbox-data/data/samples` | 모은 사진 |
-| `PILLBBOX_CORS_ORIGINS` | `https://def-uk.github.io,http://localhost:8080` | 부를 수 있는 웹 주소. 경로 없이 scheme + host |
+| `PILLBBOX_CORS_ORIGINS` | `https://www.<도메인>,http://localhost:8080` | 부를 수 있는 웹 주소. 경로 없이 scheme + host |
 | `PILLBBOX_COMMIT` | (deploy.sh가 넣음) | `/health`에 보여 줄 커밋 |
 
 ### 5.2 맥미니 준비 (처음 한 번)
@@ -296,14 +297,11 @@ DB 테이블은 셋입니다.
 # 1. 도구
 brew install uv git          # cloudflared와 터널은 이미 있음
 
-# 2. 배포용 클론과 데이터 폴더. 클론은 첫 배포 때 워크플로가 만들어도 됨
-mkdir -p ~/srv ~/srv/pillbbox-data/{data,backups,logs}
+# 2. 배포용 클론. 첫 배포 때 워크플로가 만들어도 됨
 git clone https://github.com/def-uk/pill-bbox-front.git ~/srv/pillbbox
-cp ~/srv/pillbbox/backend/.env.example ~/srv/pillbbox-data/.env   # 값 채우기
 
-# 3. 서비스 등록
-cp ~/srv/pillbbox/backend/deploy/com.pillbbox.api.plist ~/Library/LaunchAgents/
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.pillbbox.api.plist
+# 3. 첫 배포. 데이터 폴더(~/srv/pillbbox-data), .env, launchd 에이전트(api 8100, web 8200)를 만들고 띄움
+bash ~/srv/pillbbox/backend/deploy/deploy.sh
 
 # 4. 배포용 SSH 키. 원격 로그인을 켜고(포트 2222로 열어 둔 경우), 키는 이 저장소 전용으로 따로 만듦
 ssh-keygen -t ed25519 -f ~/pillbbox-deploy -N "" -C pillbbox-deploy
@@ -338,7 +336,7 @@ curl https://pillbbox-api.<도메인>/health
 - 포트는 맥미니의 다른 서비스와 겹치지 않게 `8100`을 씁니다.
 - 맥미니 설정: **잠자기 안 함**(설정 → 에너지 → "디스플레이가 꺼져 있을 때 자동으로 잠자지 않기"), **정전 후 자동 시작** 켬.
 - `launchd` 에이전트는 사용자가 로그인해야 뜹니다. SSH로 들어온 `deploy.sh`의 `launchctl kickstart gui/…`도 로그인한 세션이 있어야 됩니다. 건강 정보라 FileVault는 켜 두고, 그 대신 재부팅 뒤에는 한 번 직접 로그인합니다. 계획한 재부팅은 `sudo fdesetup authrestart`로 로그인까지 건너뜁니다.
-- `com.pillbbox.api.plist`는 `KeepAlive`를 켜서 서버가 죽으면 다시 띄우고, 로그는 `~/srv/pillbbox-data/logs/`에 씁니다.
+- 두 에이전트(`com.pillbbox.api`, `com.pillbbox.web`)는 `KeepAlive`를 켜서 죽으면 다시 뜨고, 로그는 `~/srv/pillbbox-data/logs/api.log`, `web.log`에 씁니다.
 
 ```xml
 <key>ProgramArguments</key>

@@ -30,7 +30,7 @@ fvm flutter test
 fvm flutter analyze
 ```
 
-웹을 먼저 배포합니다. `main`에 합치면 GitHub Actions가 GitHub Pages에 올립니다(`docs/DESIGN.md` 6장).
+웹을 먼저 배포합니다. `main`에 합치면 GitHub Actions가 웹 빌드와 백엔드를 맥미니에 올립니다. 웹은 `www.<도메인>`, API는 `api.<도메인>`입니다(`docs/DESIGN.md` 6장, `backend/README.md`).
 
 ## 구조
 

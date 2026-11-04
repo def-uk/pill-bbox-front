@@ -5,7 +5,7 @@
 - 입력: 복용할 알약 사진 / 출력: 약 종류·개수와 복용 기록
 - 추론: 기기 안 (웹 ONNX, Android TFLite, iOS Core ML)
 - 아키텍처: MVVM (View, ViewModel, Repository, Service)
-- 배포: 웹 먼저 (`main`에 합치면 GitHub Pages)
+- 배포: 웹 먼저 (`main`에 합치면 맥미니. 웹 `www.<도메인>`, API `api.<도메인>`)
 
 ## 실행
 
@@ -46,7 +46,7 @@ fvm flutter test
 - 사진은 긴 변 640px JPEG로 줄여 저장합니다(장당 약 20KB). 모델 입력이 640이라 인식 결과는 원본과 같습니다. 웹의 `image_picker`는 PNG를 PNG로 두므로 직접 다시 씁니다.
 
 **웹**
-- GitHub Pages는 파일을 10분 캐시합니다. 배포 직후에는 이전 버전이 보일 수 있습니다.
+- GitHub Pages는 파일을 10분 캐시해 배포 직후에 이전 버전이 보였습니다. 맥미니로 옮기며 `no-cache`로 내보냅니다.
 - 박스 위에 쓰는 약 이름은 한글 글꼴을 받은 뒤 다시 그려야 □로 깨지지 않습니다.
 - 웹은 기록이 그 브라우저에만 남아, 엑셀로 내보내고 가져옵니다. 가져오기는 합치기라 같은 파일을 두 번 가져와도 겹치지 않습니다. 사진은 빠집니다.
 - `excel` 패키지는 `image`와 `archive` 버전이 맞지 않아 xlsx를 직접 읽고 씁니다.

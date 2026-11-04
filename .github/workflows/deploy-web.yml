@@ -1,4 +1,7 @@
-# 웹 빌드를 GitHub Pages에 올린다 (docs/DESIGN.md 6장). PR에서는 빌드만 확인한다.
+# 웹 빌드를 맥미니에 올린다 (docs/DESIGN.md 6장). PR에서는 빌드만 확인한다.
+# 맥미니의 com.pillbbox.web(app/web.py)이 내보내고, Cloudflare Tunnel이 www.<도메인>을 그쪽으로 잇는다.
+# 필요한 secrets: MAC_MINI_IP, MAC_MINI_USERNAME, MAC_MINI_SSH_KEY, MAC_MINI_SSH_FINGERPRINT
+# 필요한 variables: API_BASE_URL (https://api.<도메인>)
 name: 웹 배포
 
 on:
@@ -13,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: pages-${{ github.ref }}
+  group: web-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -58,23 +61,66 @@ jobs:
 
       - run: flutter pub get
       - run: dart run sqflite_common_ffi_web:setup
-      - run: flutter build web --release --base-href "/${{ github.event.repository.name }}/"
+      # API_BASE_URL은 맥미니 API 주소다 (backend/README.md). 비어 있으면 앱이 서버 기능을 숨긴다.
+      - run: >-
+          flutter build web --release --base-href /
+          --dart-define=API_BASE_URL=${{ vars.API_BASE_URL }}
 
-      - uses: actions/upload-pages-artifact@v3
+      - name: 빌드 묶기
+        if: github.event_name != 'pull_request'
+        run: tar -czf "$RUNNER_TEMP/web.tar.gz" -C build/web .
+
+      - uses: actions/upload-artifact@v4
         if: github.event_name != 'pull_request'
         with:
-          path: frontend/build/web
+          name: web
+          path: ${{ runner.temp }}/web.tar.gz
+          retention-days: 7
 
   deploy:
     if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    timeout-minutes: 10
+    # 배포는 한 번에 하나씩, 들어온 순서대로 한다.
+    concurrency:
+      group: deploy-web-mac-mini
+      cancel-in-progress: false
     steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: web
+
+      - name: 맥미니로 보내기
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.MAC_MINI_IP }}
+          username: ${{ secrets.MAC_MINI_USERNAME }}
+          key: ${{ secrets.MAC_MINI_SSH_KEY }}
+          fingerprint: ${{ secrets.MAC_MINI_SSH_FINGERPRINT }}
+          port: 2222
+          source: web.tar.gz
+          # 홈 폴더 기준
+          target: srv/pillbbox-data/incoming
+
+      # releases/<커밋>에 풀고 current를 그쪽으로 바꾼다. 웹 서버는 다시 띄우지 않아도 새 빌드를 내보낸다.
+      - name: 새 빌드로 바꾸기
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.MAC_MINI_IP }}
+          username: ${{ secrets.MAC_MINI_USERNAME }}
+          key: ${{ secrets.MAC_MINI_SSH_KEY }}
+          fingerprint: ${{ secrets.MAC_MINI_SSH_FINGERPRINT }}
+          port: 2222
+          script: |
+            set -e
+            web=~/srv/pillbbox-data/web
+            release=$web/releases/${{ github.sha }}
+            mkdir -p "$web/releases"
+            rm -rf "$release" && mkdir -p "$release"
+            tar -xzf ~/srv/pillbbox-data/incoming/web.tar.gz -C "$release"
+            rm ~/srv/pillbbox-data/incoming/web.tar.gz
+            ln -sfn "$release" "$web/current"
+            # 최근 3개만 남긴다. 되돌릴 때는 current를 이전 폴더로 바꾼다
+            ls -1dt "$web"/releases/*/ | tail -n +4 | xargs rm -rf
+            curl -s -o /dev/null -w "웹 서버 응답: %{http_code}\n" http://127.0.0.1:8200/ || echo "웹 서버(com.pillbbox.web)가 아직 없습니다. 백엔드 배포를 먼저 하세요"

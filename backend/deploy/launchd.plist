@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- 백엔드를 띄우는 launchd 에이전트. deploy.sh가 __…__를 채워 ~/Library/LaunchAgents/에 둔다. -->
+<!-- API(com.pillbbox.api)와 웹(com.pillbbox.web)을 띄우는 launchd 에이전트의 틀. deploy.sh가 __…__를 채워 ~/Library/LaunchAgents/에 둔다. -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.pillbbox.api</string>
+  <string>__LABEL__</string>
   <key>ProgramArguments</key>
   <array>
     <string>__UV__</string>
@@ -14,7 +14,7 @@
     <string>--env-file</string>
     <string>__DATA__/.env</string>
     <string>uvicorn</string>
-    <string>app.main:create_app</string>
+    <string>__APP__</string>
     <string>--factory</string>
     <string>--host</string>
     <string>127.0.0.1</string>
@@ -30,8 +30,8 @@
   <key>ThrottleInterval</key>
   <integer>10</integer>
   <key>StandardOutPath</key>
-  <string>__DATA__/logs/api.log</string>
+  <string>__DATA__/logs/__LOG__.log</string>
   <key>StandardErrorPath</key>
-  <string>__DATA__/logs/api.log</string>
+  <string>__DATA__/logs/__LOG__.log</string>
 </dict>
 </plist>
