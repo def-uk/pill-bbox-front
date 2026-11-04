@@ -58,7 +58,12 @@ jobs:
 
       - run: flutter pub get
       - run: dart run sqflite_common_ffi_web:setup
-      - run: flutter build web --release --base-href "/${{ github.event.repository.name }}/"
+      # 사용자 도메인을 쓰면 저장소 variable WEB_BASE_HREF를 /로 둔다. 없으면 github.io/<저장소 이름>/ 아래에 올린다.
+      # API_BASE_URL은 맥미니 서버 주소다 (backend/README.md). 비어 있으면 앱이 서버 기능을 숨긴다.
+      - run: >-
+          flutter build web --release
+          --base-href "${{ vars.WEB_BASE_HREF || format('/{0}/', github.event.repository.name) }}"
+          --dart-define=API_BASE_URL=${{ vars.API_BASE_URL }}
 
       - uses: actions/upload-pages-artifact@v3
         if: github.event_name != 'pull_request'

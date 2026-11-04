@@ -267,7 +267,8 @@ web/pill_detector.js          # 웹 탐지 (onnxruntime-web)
 | 빌드 | `flutter build web --base-href /<저장소 이름>/` |
 | 올리기 | `main` push일 때만 Pages에 배포. PR에서는 빌드만 확인 |
 
-- 주소는 `https://def-uk.github.io/pill-bbox-front/`입니다.
+- 주소는 `https://def-uk.github.io/pill-bbox-front/`입니다. 사용자 도메인을 붙이면 저장소 설정 Pages의 Custom domain에 도메인을 넣고, 저장소 variable `WEB_BASE_HREF`를 `/`로 둡니다. 예전 주소는 GitHub가 새 도메인으로 넘겨 줍니다.
+- 빌드에 저장소 variable `API_BASE_URL`(맥미니 서버 주소, [backend/README.md](../backend/README.md))을 `--dart-define`으로 넘깁니다.
 - 처음 한 번 저장소 설정에서 Pages의 Source를 **GitHub Actions**로 바꿔야 합니다.
 - 화면 이동은 해시 URL(`/#/history`)이라 Pages에 별도 404 처리가 필요 없습니다.
 
