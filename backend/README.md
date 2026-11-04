@@ -34,7 +34,10 @@ pillbbox 앱의 사진을 모아 탐지 모델을 개선하고, 약·복용 기�
 [휴대폰 브라우저 / 앱]  GitHub Pages의 웹 앱. SampleUploader(사진), ServerBackupService(백업)
         │ HTTPS
         ▼
-[맥미니]  Tailscale Funnel   https://<맥미니>.<tailnet>.ts.net
+[Cloudflare]  https://pillbbox-api.<도메인>   for-nav와 같은 터널에 호스트 이름만 추가
+        │ 터널 (맥미니의 cloudflared가 바깥으로 연결해 둠)
+        ▼
+[맥미니]  cloudflared
         │ 127.0.0.1:8100
         ▼
          uvicorn + FastAPI   launchd가 띄우고 죽으면 다시 띄움
@@ -54,7 +57,7 @@ pillbbox 앱의 사진을 모아 탐지 모델을 개선하고, 약·복용 기�
 | 패키지 | [uv](https://docs.astral.sh/uv/) (`uv.lock`으로 고정) | 모델 스크립트에서 이미 씀. 맥미니에서 `uv sync --frozen` 한 줄로 같은 환경 |
 | DB | SQLite + SQLAlchemy 2.0 | 맥미니 한 대라 DB 서버가 필요 없음. 파일 하나라 백업이 쉬움 |
 | 사진 | DB 밖 파일 (`samples/<연-월>/<id>.jpg`) | 장당 약 20KB. 하루 1,000장이어도 20MB |
-| 바깥 공개 | Tailscale Funnel | 공유기 포트를 열지 않고 HTTPS 주소가 생김. GitHub Pages(HTTPS)에서 부르려면 API도 HTTPS여야 함 |
+| 바깥 공개 | Cloudflare Tunnel (for-nav와 같은 터널) | 이미 쓰고 있어 새로 설치할 것이 없음. 공유기 포트를 열지 않고 HTTPS 주소가 생김. GitHub Pages(HTTPS)에서 부르려면 API도 HTTPS여야 함 |
 | 배포 | `main`에 합치면 GitHub Actions가 SSH로 맥미니에 들어가 `git pull` 후 `deploy.sh` (5장) | 다른 프로젝트(for-nav)와 같은 방식. GitHub가 제공하는 러너에서 돌고 `main` push에만 돌아, public 저장소여도 PR 코드가 맥미니에서 돌지 않음 |
 
 ## 3. API
@@ -79,7 +82,7 @@ pillbbox 앱의 사진을 모아 탐지 모델을 개선하고, 약·복용 기�
 - 요청에는 `Authorization: Bearer <코드>`로 실어 보냅니다.
 - 서버에는 코드의 SHA-256만 저장합니다. DB 파일이 새어도 코드를 알 수 없습니다.
 - 코드를 잃어버리면 되찾을 수 없습니다. 앱 설정 화면에 코드를 보여 주고 어딘가 적어 두라고 안내합니다.
-- `POST /v1/vaults`는 누구나 부를 수 있으므로 서버 전체에서 시간당 30개로 막습니다(메모리 카운터).
+- `POST /v1/vaults`는 누구나 부를 수 있으므로 서버 전체에서 시간당 30개로 막습니다(메모리 카운터). 필요하면 Cloudflare의 Rate limiting 규칙으로 바깥에서도 막습니다.
 
 ### 3.2 백업 형식
 
@@ -287,8 +290,7 @@ DB 테이블은 셋입니다.
 
 ```bash
 # 1. 도구
-brew install uv git
-# Tailscale은 앱으로 설치하고 로그인. 관리 화면(Access controls)에서 이 기기에 Funnel을 허용
+brew install uv git          # cloudflared는 for-nav 때 설치되어 있음
 
 # 2. 배포용 클론과 데이터 폴더. 클론은 첫 배포 때 워크플로가 만들어도 됨
 mkdir -p ~/srv ~/srv/pillbbox-data/{data,backups,logs}
@@ -304,11 +306,28 @@ ssh-keygen -t ed25519 -f ~/pillbbox-deploy -N "" -C pillbbox-deploy
 cat ~/pillbbox-deploy.pub >> ~/.ssh/authorized_keys
 # ~/pillbbox-deploy(비밀 키)를 저장소 secrets의 MAC_MINI_SSH_KEY에 넣고 파일은 지움
 
-# 5. 바깥에 HTTPS로 공개
-tailscale funnel --bg 8100
-tailscale funnel status          # https://<맥미니>.<tailnet>.ts.net
-curl https://<맥미니>.<tailnet>.ts.net/health
+# 5. 바깥에 HTTPS로 공개: for-nav의 터널에 호스트 이름 추가 (아래)
+curl https://pillbbox-api.<도메인>/health
 ```
+
+터널을 어떻게 만들었는지에 따라 둘 중 하나입니다.
+
+- **대시보드에서 만든 터널**(`cloudflared service install <토큰>`으로 설치): Cloudflare Zero Trust → Networks → Tunnels → for-nav 터널 → Public Hostname 추가. 호스트 이름 `pillbbox-api.<도메인>`, 서비스 `http://localhost:8100`. 맥미니에서 할 일은 없습니다.
+- **설정 파일로 만든 터널**(`~/.cloudflared/config.yml`): `ingress`의 맨 끝(`service: http_status:404`) **앞에** 한 줄을 더하고, DNS를 잇고, cloudflared를 다시 띄웁니다.
+
+  ```yaml
+  ingress:
+    - hostname: pillbbox-api.<도메인>
+      service: http://localhost:8100
+    # … for-nav 항목들
+    - service: http_status:404
+  ```
+
+  ```bash
+  cloudflared tunnel route dns <터널 이름> pillbbox-api.<도메인>
+  ```
+
+어느 쪽인지는 맥미니에서 `ls ~/.cloudflared/`에 `config.yml`이 있는지로 압니다.
 
 - 배포용 클론은 개발용과 따로 둡니다. 워크플로가 `git pull --ff-only`로 맞추므로 여기서 코드를 고치지 않습니다. 고치면 다음 배포가 실패합니다.
 - DB·사진·`.env`·로그는 클론 밖(`~/srv/pillbbox-data/`)에 둡니다. 클론을 지우고 다시 받아도 데이터는 남습니다.
@@ -329,7 +348,7 @@ curl https://<맥미니>.<tailnet>.ts.net/health
 <key>KeepAlive</key><true/>
 ```
 
-uvicorn은 `127.0.0.1`에만 엽니다. 바깥에서는 Funnel을 거쳐서만 들어옵니다.
+uvicorn은 `127.0.0.1`에만 엽니다. 바깥에서는 Cloudflare Tunnel을 거쳐서만 들어옵니다. 요청한 사람의 IP는 `CF-Connecting-IP` 헤더에 있습니다.
 
 ### 5.3 배포 흐름
 
@@ -446,7 +465,7 @@ fvm flutter run -d chrome --web-port 8080 --dart-define=API_BASE_URL=http://loca
 | 순서 | 할 일 | 끝난 기준 |
 |---|---|---|
 | 1 | `backend/` 뼈대, `/health`, `backend.yml` | PR에서 pytest가 돎 |
-| 2 | 맥미니 준비, launchd, Funnel, `deploy.sh`, `deploy-backend.yml` | `main`에 합치면 워크플로가 끝날 때 `https://…ts.net/health`가 새 커밋을 보여 줌. 일부러 깨뜨린 커밋은 되돌려지고 워크플로가 실패 |
+| 2 | 맥미니 준비, launchd, 터널 호스트 이름, `deploy.sh`, `deploy-backend.yml` | `main`에 합치면 워크플로가 끝날 때 `https://pillbbox-api.<도메인>/health`가 새 커밋을 보여 줌. 일부러 깨뜨린 커밋은 되돌려지고 워크플로가 실패 |
 | 3 | 보관함, `POST`/`DELETE /v1/samples` | 테스트: 코드 없이 401, 같은 `id`를 두 번 올려도 한 장, 지우면 파일도 지워짐 |
 | 4 | 앱: 박스별 결과, 동의 화면, `SampleUploader` | 팀원이 웹에서 찍은 사진과 바꾼 약이 맥미니에 쌓임. EXIF가 없음 |
 | 5 | `export_yolo.py`, 휴대폰 평가 세트 먼저, 검수(박스 포함), 학습 | 모은 사진을 더해 학습한 모델이, 보관함 단위로 떼어 둔 휴대폰 평가 세트에서 mAP75-95와 그대로 저장한 비율 모두 지금 모델보다 나음. 지금 모델의 휴대폰 점수를 먼저 잼 |
@@ -465,6 +484,6 @@ fvm flutter run -d chrome --web-port 8080 --dart-define=API_BASE_URL=http://loca
 | 사진 보관 기간 | 1년. 검수해 학습 데이터로 옮긴 사진은 모델 저장소 규칙을 따름 | 팀 |
 | 수집 동의 문구 | 4.3의 항목. 팀 밖 사람에게 열기 전에 개인정보 처리방침과 민감정보 동의가 법에 맞는지 확인 | 팀 |
 | 검수 도구 | 처음에는 내보낸 폴더를 직접 봄. 많아지면 Label Studio 같은 도구 | 모델 팀 |
-| 바깥 공개 방법 | Tailscale Funnel. 도메인이 있으면 Cloudflare Tunnel로 `api.<도메인>`을 써도 됨 | 팀 |
-| 건강 정보 보관 | 맥미니 FileVault + 코드 해시만 저장. 서버 데이터는 암호화하지 않음. 백업은 필요하면 앱에서 코드로 암호화해 올릴 수 있음(종단 간 암호화). 사진은 학습에 써야 하므로 서버가 읽을 수 있어야 함 | 팀 |
+| 바깥 공개 방법 | for-nav의 Cloudflare Tunnel에 `pillbbox-api.<도메인>` 추가. 도메인과 호스트 이름은 정해야 함 | 팀 |
+| 건강 정보 보관 | 맥미니 FileVault + 코드 해시만 저장. 서버 데이터는 암호화하지 않음. 백업은 필요하면 앱에서 코드로 암호화해 올릴 수 있음(종단 간 암호화). 사진은 학습에 써야 하므로 서버가 읽을 수 있어야 함. Cloudflare Tunnel은 Cloudflare에서 HTTPS를 풀었다가 다시 감싸므로, 사진과 백업이 Cloudflare를 지남. 수집 동의 화면의 "어디에"에 적음 | 팀 |
 | 엑셀 백업을 남길지 | 남김. 서버 없이도 쓸 수 있고, 서버를 내려도 데이터를 옮길 수 있음 | 팀 |
