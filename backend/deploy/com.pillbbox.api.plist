@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 백엔드를 띄우는 launchd 에이전트. deploy.sh가 __…__를 채워 ~/Library/LaunchAgents/에 둔다. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.pillbbox.api</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__UV__</string>
+    <string>run</string>
+    <!-- 의존성은 deploy.sh가 맞춘다. 띄울 때마다 맞추지 않는다. -->
+    <string>--no-sync</string>
+    <string>--env-file</string>
+    <string>__DATA__/.env</string>
+    <string>uvicorn</string>
+    <string>app.main:create_app</string>
+    <string>--factory</string>
+    <string>--host</string>
+    <string>127.0.0.1</string>
+    <string>--port</string>
+    <string>__PORT__</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__BACKEND__</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>StandardOutPath</key>
+  <string>__DATA__/logs/api.log</string>
+  <key>StandardErrorPath</key>
+  <string>__DATA__/logs/api.log</string>
+</dict>
+</plist>

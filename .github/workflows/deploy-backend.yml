@@ -1,0 +1,61 @@
+# main에 backend/가 합쳐지면 테스트를 돌리고 맥미니에 배포한다 (backend/README.md 5.3).
+# 맥미니의 클론(~/srv/pillbbox, 없으면 새로 클론)을 main으로 올리고 backend/deploy/deploy.sh를 돌린다.
+# 필요한 secrets: MAC_MINI_IP, MAC_MINI_USERNAME, MAC_MINI_SSH_KEY, MAC_MINI_SSH_FINGERPRINT
+name: 백엔드 배포 (맥미니)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+      - '!**/*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 배포는 한 번에 하나씩, 들어온 순서대로 한다. 앞선 배포를 취소하지 않는다.
+concurrency:
+  group: deploy-mac-mini
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: uv sync --frozen
+      - run: uv run pytest -q
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 맥미니에 배포
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.MAC_MINI_IP }}
+          username: ${{ secrets.MAC_MINI_USERNAME }}
+          key: ${{ secrets.MAC_MINI_SSH_KEY }}
+          fingerprint: ${{ secrets.MAC_MINI_SSH_FINGERPRINT }}
+          port: 2222
+          command_timeout: 5m
+          # git pull을 먼저 끝내고 스크립트를 부른다. 실행 중인 스크립트 파일을 pull로 바꾸지 않기 위해서다
+          script: |
+            set -e
+            if [ ! -d ~/srv/pillbbox/.git ]; then
+              mkdir -p ~/srv
+              git clone ${{ github.server_url }}/${{ github.repository }}.git ~/srv/pillbbox
+            fi
+            cd ~/srv/pillbbox
+            git pull --ff-only origin main
+            bash backend/deploy/deploy.sh
