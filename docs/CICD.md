@@ -53,3 +53,5 @@ main push ──▶ deploy-backend.yml (backend/** 바뀌면)       deploy-web.y
 ```bash
 .github/scripts/smoke.sh api https://api.havepills.party <배포한 커밋 전체 해시>
 ```
+
+<!-- CI 검증용(시나리오 4). 머지하지 않는다. -->
