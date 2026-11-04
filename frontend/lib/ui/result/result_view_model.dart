@@ -11,6 +11,8 @@ import '../../data/repositories/medication_repository.dart';
 import '../../data/services/detection_mapper.dart';
 import '../../data/services/pill_detector.dart';
 import '../../data/services/pill_label_service.dart';
+import '../../data/services/platform_services.dart'
+    if (dart.library.js_interop) '../../data/services/platform_services_web.dart';
 import '../../utils/intake_matcher.dart';
 import '../../utils/object_finder.dart';
 
@@ -89,7 +91,7 @@ class ResultViewModel extends ChangeNotifier {
     required this._labels,
     Future<List<FoundObject>> Function(Uint8List photo)? objectFinder,
     DateTime Function()? now,
-  }) : _findObjects = objectFinder ?? ((photo) => compute(findObjects, photo)),
+  }) : _findObjects = objectFinder ?? findPhotoObjects,
        _now = now ?? DateTime.now;
 
   final Uint8List photo;

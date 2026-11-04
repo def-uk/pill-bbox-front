@@ -27,7 +27,7 @@ List<FoundObject> findObjects(Uint8List bytes) {
   final decoded = img.decodeImage(bytes);
   if (decoded == null) return const [];
   var image = img.bakeOrientation(decoded);
-  final scale = min(1.0, _side / max(image.width, image.height));
+  final scale = min(1.0, objectFinderSide / max(image.width, image.height));
   if (scale < 1) {
     image = img.copyResize(
       image,
@@ -36,6 +36,12 @@ List<FoundObject> findObjects(Uint8List bytes) {
       interpolation: img.Interpolation.average,
     );
   }
+  return findObjectsInImage(image, scale);
+}
+
+/// 이미 긴 변 [objectFinderSide]px 이하로 줄인 [image]에서 물체를 찾는다. [scale]은 원본 대비 줄인 비율이고,
+/// 박스는 원본 좌표로 되돌려 준다. 웹은 브라우저가 디코드와 축소를 맡아 이것만 부른다.
+List<FoundObject> findObjectsInImage(img.Image image, double scale) {
   final w = image.width, h = image.height;
   final lab = _toLab(image);
   final background = _borderMedian(lab, w, h);
@@ -79,7 +85,8 @@ List<FoundObject> findObjects(Uint8List bytes) {
   return objects;
 }
 
-const _side = 640;
+/// 물체를 찾기 전에 사진의 긴 변을 이 크기로 줄인다.
+const objectFinderSide = 640;
 
 /// 배경과 이만큼은 달라야 물체로 본다. 알약이 없는 사진에서 잡티를 물체로 잡지 않게 한다.
 const _minColorDistance = 12.0;

@@ -50,7 +50,7 @@
 | 플랫폼 | 구현 | 모델 파일 |
 |---|---|---|
 | Android, iOS | Ultralytics 공식 Flutter 플러그인 [`ultralytics_yolo`](https://pub.dev/packages/ultralytics_yolo) | Android TFLite, iOS Core ML |
-| 웹 | 브라우저에서 [onnxruntime-web](https://onnxruntime.ai/docs/tutorials/web/)(`web/pill_detector.js`). `ultralytics_yolo`는 웹을 지원하지 않음 | ONNX |
+| 웹 | 브라우저의 Web Worker에서 [onnxruntime-web](https://onnxruntime.ai/docs/tutorials/web/)(`web/pill_detector_worker.js`). 웹 서버가 COOP/COEP를 켜 wasm 스레드를 여러 개 쓴다. `ultralytics_yolo`는 웹을 지원하지 않음 | ONNX |
 
 웹도 사진을 서버로 보내지 않고 브라우저 안에서 추론합니다.
 
@@ -117,7 +117,7 @@ class Detection {
 |---|---|
 | `FakePillDetector` | 모델 확정 전 화면 개발, 위젯 테스트. 고정된 결과를 돌려줌 |
 | `YoloPillDetector` | Android, iOS. `ultralytics_yolo`로 실제 추론 |
-| `OnnxPillDetector` | 웹. `web/pill_detector.js`(onnxruntime-web)로 실제 추론 |
+| `OnnxPillDetector` | 웹. `web/pill_detector.js`가 띄운 Web Worker(`web/pill_detector_worker.js`, onnxruntime-web)로 실제 추론 |
 
 ### 3.5 정확도 한계와 앱의 대응
 
@@ -207,7 +207,8 @@ lib/
 │   └── common/               # 공통 위젯, 테마
 └── utils/                    # intake_matcher.dart
 assets/models/                # android/·ios/·web/pillbox-<태그>.tflite / .mlpackage.zip / .onnx, pillbox-<태그>.labels.json (Git 제외), VERSION
-web/pill_detector.js          # 웹 탐지 (onnxruntime-web)
+web/pill_detector.js          # 웹 탐지 창구 (Worker를 띄우고 부른다)
+web/pill_detector_worker.js   # 웹 탐지 (onnxruntime-web, 사진 디코드)
 ```
 
 ### 5.2 데이터

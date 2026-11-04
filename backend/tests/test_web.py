@@ -39,6 +39,19 @@ def test_serves_build_with_cache_headers(settings, tmp_path):
     assert "immutable" in model.headers["cache-control"]
 
 
+def test_enables_cross_origin_isolation_for_wasm_threads(settings, tmp_path):
+    root = tmp_path / "web"
+    root.mkdir()
+    point_current(root, release(root, "a", "a"))
+    settings.web_dir = root / "current"
+    client = TestClient(create_app(settings))
+
+    for path in ["/", "/assets/assets/models/pillbox-v1.onnx"]:
+        headers = client.get(path).headers
+        assert headers["cross-origin-opener-policy"] == "same-origin"
+        assert headers["cross-origin-embedder-policy"] == "require-corp"
+
+
 def test_new_release_is_served_without_restart(settings, tmp_path):
     root = tmp_path / "web"
     root.mkdir()
