@@ -35,13 +35,13 @@ pillbbox 앱의 사진을 모아 탐지 모델을 개선하고, 약·복용 기�
         │ HTTPS
         ▼
 [맥미니]  Tailscale Funnel   https://<맥미니>.<tailnet>.ts.net
-        │ 127.0.0.1:8000
+        │ 127.0.0.1:8100
         ▼
          uvicorn + FastAPI   launchd가 띄우고 죽으면 다시 띄움
         │
         ▼
-         SQLite              ~/pillbbox/data/pillbbox.db
-         사진 파일            ~/pillbbox/data/samples/
+         SQLite              ~/srv/pillbbox-data/data/pillbbox.db
+         사진 파일            ~/srv/pillbbox-data/data/samples/
         │ export_yolo.py
         ▼
 [Mac Studio]  pill-bbox 저장소에서 학습 → 새 모델 태그 → 앱에 배포
@@ -55,7 +55,7 @@ pillbbox 앱의 사진을 모아 탐지 모델을 개선하고, 약·복용 기�
 | DB | SQLite + SQLAlchemy 2.0 | 맥미니 한 대라 DB 서버가 필요 없음. 파일 하나라 백업이 쉬움 |
 | 사진 | DB 밖 파일 (`samples/<연-월>/<id>.jpg`) | 장당 약 20KB. 하루 1,000장이어도 20MB |
 | 바깥 공개 | Tailscale Funnel | 공유기 포트를 열지 않고 HTTPS 주소가 생김. GitHub Pages(HTTPS)에서 부르려면 API도 HTTPS여야 함 |
-| 배포 | 맥미니가 5분마다 `main`을 확인해 `backend/`가 바뀌었으면 당겨 와 재시작 (5장) | 저장소가 public이라 self-hosted runner를 두면 PR 코드가 맥미니에서 돌 수 있음. 당겨 오는 방식은 바깥에서 맥미니로 들어올 길이 없음 |
+| 배포 | `main`에 합치면 GitHub Actions가 SSH로 맥미니에 들어가 `git pull` 후 `deploy.sh` (5장) | 다른 프로젝트(for-nav)와 같은 방식. GitHub가 제공하는 러너에서 돌고 `main` push에만 돌아, public 저장소여도 PR 코드가 맥미니에서 돌지 않음 |
 
 ## 3. API
 
@@ -262,8 +262,7 @@ backend/
 │   └── test_api.py         # TestClient로 보관함 → PUT → 412 → GET, 사진 올리기·지우기
 └── deploy/
     ├── com.pillbbox.api.plist      # uvicorn을 띄우는 launchd 에이전트
-    ├── com.pillbbox.update.plist   # 5분마다 update.sh
-    ├── update.sh                   # main을 확인해 바뀌었으면 당겨 와 재시작
+    ├── deploy.sh                   # 의존성 맞추고 재시작, /health 확인, 실패하면 되돌림
     └── backup-db.sh                # 매일 SQLite 백업
 ```
 
@@ -279,10 +278,10 @@ DB 테이블은 셋입니다.
 
 | 환경 변수 | 예 | 뜻 |
 |---|---|---|
-| `PILLBBOX_DATABASE_URL` | `sqlite:////Users/<사용자>/pillbbox/data/pillbbox.db` | DB 파일. 코드 폴더 밖에 둠 |
-| `PILLBBOX_SAMPLES_DIR` | `/Users/<사용자>/pillbbox/data/samples` | 모은 사진 |
+| `PILLBBOX_DATABASE_URL` | `sqlite:////Users/<사용자>/srv/pillbbox-data/data/pillbbox.db` | DB 파일. 코드 폴더 밖에 둠 |
+| `PILLBBOX_SAMPLES_DIR` | `/Users/<사용자>/srv/pillbbox-data/data/samples` | 모은 사진 |
 | `PILLBBOX_CORS_ORIGINS` | `https://def-uk.github.io,http://localhost:8080` | 부를 수 있는 웹 주소. 경로 없이 scheme + host |
-| `PILLBBOX_COMMIT` | (update.sh가 넣음) | `/health`에 보여 줄 커밋 |
+| `PILLBBOX_COMMIT` | (deploy.sh가 넣음) | `/health`에 보여 줄 커밋 |
 
 ### 5.2 맥미니 준비 (처음 한 번)
 
@@ -291,37 +290,42 @@ DB 테이블은 셋입니다.
 brew install uv git
 # Tailscale은 앱으로 설치하고 로그인. 관리 화면(Access controls)에서 이 기기에 Funnel을 허용
 
-# 2. 배포용 클론. backend/만 받는다
-mkdir -p ~/pillbbox/data ~/pillbbox/backups ~/pillbbox/logs
-git clone --filter=blob:none --sparse https://github.com/def-uk/pill-bbox-front.git ~/pillbbox/repo
-git -C ~/pillbbox/repo sparse-checkout set backend
-cp ~/pillbbox/repo/backend/.env.example ~/pillbbox/.env   # 값 채우기
+# 2. 배포용 클론과 데이터 폴더. 클론은 첫 배포 때 워크플로가 만들어도 됨
+mkdir -p ~/srv ~/srv/pillbbox-data/{data,backups,logs}
+git clone https://github.com/def-uk/pill-bbox-front.git ~/srv/pillbbox
+cp ~/srv/pillbbox/backend/.env.example ~/srv/pillbbox-data/.env   # 값 채우기
 
 # 3. 서비스 등록
-cp ~/pillbbox/repo/backend/deploy/*.plist ~/Library/LaunchAgents/
+cp ~/srv/pillbbox/backend/deploy/com.pillbbox.api.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.pillbbox.api.plist
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.pillbbox.update.plist
 
-# 4. 바깥에 HTTPS로 공개
-tailscale funnel --bg 8000
+# 4. 배포용 SSH 키. for-nav와 같은 sshd(포트 2222)를 쓰고, 키는 이 저장소 전용으로 따로 만듦
+ssh-keygen -t ed25519 -f ~/pillbbox-deploy -N "" -C pillbbox-deploy
+cat ~/pillbbox-deploy.pub >> ~/.ssh/authorized_keys
+# ~/pillbbox-deploy(비밀 키)를 저장소 secrets의 MAC_MINI_SSH_KEY에 넣고 파일은 지움
+
+# 5. 바깥에 HTTPS로 공개
+tailscale funnel --bg 8100
 tailscale funnel status          # https://<맥미니>.<tailnet>.ts.net
 curl https://<맥미니>.<tailnet>.ts.net/health
 ```
 
-- 배포용 클론은 개발용과 따로 둡니다. `update.sh`가 `reset --hard`로 맞추므로 여기서 코드를 고치지 않습니다.
+- 배포용 클론은 개발용과 따로 둡니다. 워크플로가 `git pull --ff-only`로 맞추므로 여기서 코드를 고치지 않습니다. 고치면 다음 배포가 실패합니다.
+- DB·사진·`.env`·로그는 클론 밖(`~/srv/pillbbox-data/`)에 둡니다. 클론을 지우고 다시 받아도 데이터는 남습니다.
+- 포트는 for-nav와 겹치지 않게 `8100`을 씁니다.
 - 맥미니 설정: **잠자기 안 함**(설정 → 에너지 → "디스플레이가 꺼져 있을 때 자동으로 잠자지 않기"), **정전 후 자동 시작** 켬.
-- `launchd` 에이전트는 사용자가 로그인해야 뜹니다. 건강 정보라 FileVault는 켜 두고, 그 대신 재부팅 뒤에는 한 번 직접 로그인합니다. 계획한 재부팅은 `sudo fdesetup authrestart`로 로그인까지 건너뜁니다.
-- `com.pillbbox.api.plist`는 `KeepAlive`를 켜서 서버가 죽으면 다시 띄우고, 로그는 `~/pillbbox/logs/`에 씁니다.
+- `launchd` 에이전트는 사용자가 로그인해야 뜹니다. SSH로 들어온 `deploy.sh`의 `launchctl kickstart gui/…`도 로그인한 세션이 있어야 됩니다. 건강 정보라 FileVault는 켜 두고, 그 대신 재부팅 뒤에는 한 번 직접 로그인합니다. 계획한 재부팅은 `sudo fdesetup authrestart`로 로그인까지 건너뜁니다.
+- `com.pillbbox.api.plist`는 `KeepAlive`를 켜서 서버가 죽으면 다시 띄우고, 로그는 `~/srv/pillbbox-data/logs/`에 씁니다.
 
 ```xml
 <key>ProgramArguments</key>
 <array>
   <string>/opt/homebrew/bin/uv</string>
-  <string>run</string><string>--frozen</string><string>--env-file</string><string>/Users/<사용자>/pillbbox/.env</string>
+  <string>run</string><string>--frozen</string><string>--env-file</string><string>/Users/<사용자>/srv/pillbbox-data/.env</string>
   <string>uvicorn</string><string>app.main:app</string>
-  <string>--host</string><string>127.0.0.1</string><string>--port</string><string>8000</string>
+  <string>--host</string><string>127.0.0.1</string><string>--port</string><string>8100</string>
 </array>
-<key>WorkingDirectory</key><string>/Users/<사용자>/pillbbox/repo/backend</string>
+<key>WorkingDirectory</key><string>/Users/<사용자>/srv/pillbbox/backend</string>
 <key>KeepAlive</key><true/>
 ```
 
@@ -330,38 +334,79 @@ uvicorn은 `127.0.0.1`에만 엽니다. 바깥에서는 Funnel을 거쳐서만 �
 ### 5.3 배포 흐름
 
 ```text
-작업 브랜치 ──PR──▶ GitHub Actions (backend.yml): ruff, pytest ──▶ main에 합침
-                                                                        │
-맥미니 update.sh (5분마다) ◀──────── git fetch origin main ─────────────┘
-  backend/가 바뀌었나? ── 아니오 → 끝
-        │ 예
-  reset --hard → uv sync --frozen → launchctl kickstart -k → /health 확인
-        │ 실패
-  이전 커밋으로 되돌리고 다시 띄움
+작업 브랜치 ──PR──▶ backend.yml: ruff, pytest ──▶ main에 합침
+                                                     │ backend/** 가 바뀌었으면 (문서만 바뀌면 건너뜀)
+                                                     ▼
+                         deploy-backend.yml (GitHub 러너) ──SSH :2222──▶ 맥미니
+                                                                         cd ~/srv/pillbbox
+                                                                         git pull --ff-only origin main
+                                                                         bash backend/deploy/deploy.sh
 ```
 
-`update.sh`가 하는 일:
+`.github/workflows/deploy-backend.yml`은 for-nav의 워크플로를 그대로 따릅니다.
 
-1. `git fetch origin main`. `origin/main`과 지금 커밋 사이에 `backend/` 변경이 없으면 끝냅니다.
-2. 지금 커밋을 `~/pillbbox/deployed-prev`에 적고 `git reset --hard origin/main`.
-3. DB를 `~/pillbbox/backups/`에 복사(`sqlite3 .backup`)하고 `uv sync --frozen`.
-4. `.env`의 `PILLBBOX_COMMIT`을 새 커밋으로 바꾸고 `launchctl kickstart -k gui/$(id -u)/com.pillbbox.api`.
-5. `/health`가 10초 안에 새 커밋을 돌려주지 않으면 이전 커밋으로 되돌리고 다시 띄웁니다. 실패는 로그에 남깁니다.
+```yaml
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**', '.github/workflows/deploy-backend.yml', '!**/*.md']
+  workflow_dispatch:
 
-맥미니가 GitHub에서 가져오기만 하므로 저장소에 비밀값을 넣을 필요가 없습니다. 바로 배포하고 싶으면 맥미니에서 `~/pillbbox/repo/backend/deploy/update.sh`를 직접 실행합니다.
+concurrency:
+  group: deploy-mac-mini        # 이 저장소의 배포를 한 번에 하나씩, 들어온 순서대로
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.MAC_MINI_IP }}
+          username: ${{ secrets.MAC_MINI_USERNAME }}
+          key: ${{ secrets.MAC_MINI_SSH_KEY }}
+          port: 2222
+          command_timeout: 5m
+          # git pull을 먼저 끝내고 스크립트를 부른다. 실행 중인 스크립트 파일을 pull로 바꾸지 않기 위해서다
+          script: |
+            set -e
+            if [ ! -d ~/srv/pillbbox/.git ]; then
+              mkdir -p ~/srv
+              git clone ${{ github.server_url }}/${{ github.repository }}.git ~/srv/pillbbox
+            fi
+            cd ~/srv/pillbbox
+            git pull --ff-only origin main
+            bash backend/deploy/deploy.sh
+```
+
+- `concurrency` 그룹은 저장소마다 따로입니다. for-nav 배포와 동시에 돌 수는 있지만, 클론·포트·launchd 이름이 달라 서로 건드리지 않습니다.
+- secrets는 셋입니다: `MAC_MINI_IP`, `MAC_MINI_USERNAME`, `MAC_MINI_SSH_KEY`. 저장소 secrets는 저장소마다 따로라 이 저장소에도 넣어야 합니다. IP와 사용자는 for-nav와 같고, 키는 5.2의 배포 전용 키입니다.
+
+`deploy.sh`가 하는 일:
+
+1. SSH로 들어온 셸에는 Homebrew 경로가 없으므로 `PATH`에 `/opt/homebrew/bin`을 더합니다.
+2. DB를 `~/srv/pillbbox-data/backups/`에 복사(`sqlite3 .backup`)하고 `uv sync --frozen`.
+3. `.env`의 `PILLBBOX_COMMIT`을 지금 커밋으로 바꾸고 `launchctl kickstart -k gui/$(id -u)/com.pillbbox.api`.
+4. `/health`가 20초 안에 지금 커밋을 돌려주는지 봅니다.
+5. 아니면 직전 배포 커밋(`~/srv/pillbbox-data/deployed`)으로 `git reset --hard`하고 다시 띄운 뒤 실패로 끝냅니다. 워크플로가 빨간색이 되어 바로 압니다. 직전 커밋은 `main`의 조상이라 다음 배포의 `git pull --ff-only`가 그대로 됩니다.
+6. 성공하면 지금 커밋을 `~/srv/pillbbox-data/deployed`에 적습니다.
+
+바로 다시 배포하고 싶으면 Actions에서 `workflow_dispatch`로 돌리거나, 맥미니에서 `cd ~/srv/pillbbox && bash backend/deploy/deploy.sh`를 실행합니다.
 
 ### 5.4 GitHub Actions
 
 | 워크플로 | 바꿀 것 |
 |---|---|
 | `backend.yml` (새로) | `backend/**`가 바뀐 PR과 `main` push에서 `uv sync --frozen`, `uv run ruff check`, `uv run pytest`. 웹 배포는 `frontend/**`가 바뀔 때만 돌아 서로 건드리지 않음 |
+| `deploy-backend.yml` (새로) | 5.3. `main`에 `backend/**`가 합쳐지면 맥미니에 배포 |
 | `deploy-web.yml` | 빌드에 `--dart-define=API_BASE_URL=${{ vars.API_BASE_URL }}`. 주소는 저장소 Variables에 둠 |
 
 ### 5.5 데이터 백업
 
-- `backup-db.sh`가 매일 새벽 `sqlite3 pillbbox.db ".backup ..."`으로 `~/pillbbox/backups/`에 날짜별로 남기고, 14일 넘은 것은 지웁니다.
+- `backup-db.sh`가 매일 새벽 `sqlite3 pillbbox.db ".backup ..."`으로 `~/srv/pillbbox-data/backups/`에 날짜별로 남기고, 14일 넘은 것은 지웁니다.
 - 사진 폴더는 매일 백업하지 않고 Time Machine에 맡깁니다. DB만 있으면 어떤 사진이 있었는지는 압니다.
-- 맥미니 Time Machine에 `~/pillbbox/`를 포함합니다.
+- 맥미니 Time Machine에 `~/srv/pillbbox-data/`를 포함합니다.
 
 ## 6. 앱 쪽 변경
 
@@ -401,7 +446,7 @@ fvm flutter run -d chrome --web-port 8080 --dart-define=API_BASE_URL=http://loca
 | 순서 | 할 일 | 끝난 기준 |
 |---|---|---|
 | 1 | `backend/` 뼈대, `/health`, `backend.yml` | PR에서 pytest가 돎 |
-| 2 | 맥미니 준비, launchd, Funnel, `update.sh` | `main`에 합치고 5분 안에 `https://…ts.net/health`가 새 커밋을 보여 줌 |
+| 2 | 맥미니 준비, launchd, Funnel, `deploy.sh`, `deploy-backend.yml` | `main`에 합치면 워크플로가 끝날 때 `https://…ts.net/health`가 새 커밋을 보여 줌. 일부러 깨뜨린 커밋은 되돌려지고 워크플로가 실패 |
 | 3 | 보관함, `POST`/`DELETE /v1/samples` | 테스트: 코드 없이 401, 같은 `id`를 두 번 올려도 한 장, 지우면 파일도 지워짐 |
 | 4 | 앱: 박스별 결과, 동의 화면, `SampleUploader` | 팀원이 웹에서 찍은 사진과 바꾼 약이 맥미니에 쌓임. EXIF가 없음 |
 | 5 | `export_yolo.py`, 휴대폰 평가 세트 먼저, 검수(박스 포함), 학습 | 모은 사진을 더해 학습한 모델이, 보관함 단위로 떼어 둔 휴대폰 평가 세트에서 mAP75-95와 그대로 저장한 비율 모두 지금 모델보다 나음. 지금 모델의 휴대폰 점수를 먼저 잼 |
