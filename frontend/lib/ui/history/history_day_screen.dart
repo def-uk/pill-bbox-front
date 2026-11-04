@@ -5,6 +5,7 @@ import '../../data/models/intake_record.dart';
 import '../../utils/time_format.dart';
 import '../common/medication_picker.dart';
 import '../common/theme.dart';
+import '../common/widgets.dart';
 import 'history_day_view_model.dart';
 
 class HistoryDayScreen extends StatelessWidget {
@@ -28,34 +29,45 @@ class HistoryDayScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(formatDate(vm.day))),
       body: switch (vm) {
-        HistoryDayViewModel(loading: true) => const Center(
-          child: CircularProgressIndicator(),
-        ),
-        HistoryDayViewModel(entries: []) => const Center(
-          child: Text('이날은 복용 기록이 없습니다'),
+        HistoryDayViewModel(loading: true) => const LoadingState(),
+        HistoryDayViewModel(entries: []) => const EmptyState(
+          icon: Icons.event_busy_rounded,
+          title: '이날은 복용 기록이 없습니다',
         ),
         _ => ListView(
+          padding: pagePadding(context),
           children: [
-            for (final entry in vm.entries)
-              ListTile(
-                leading: _Thumbnail(entry: entry),
-                title: Text(entry.name),
-                subtitle: Text(
-                  '${formatTime(entry.record.takenAt)} · '
-                  '${entry.record.source == IntakeSource.camera ? '사진' : '직접 기록'}',
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('${entry.record.count}정'),
-                    IconButton(
-                      tooltip: '기록 삭제',
-                      onPressed: () => delete(entry),
-                      icon: const Icon(Icons.delete_outline),
+            GroupCard(
+              children: [
+                for (final entry in vm.entries)
+                  ListTile(
+                    leading: _Thumbnail(entry: entry),
+                    title: Text(entry.name),
+                    subtitle: Text(
+                      '${formatTime(entry.record.takenAt)} · '
+                      '${entry.record.source == IntakeSource.camera ? '사진' : '직접 기록'}',
                     ),
-                  ],
-                ),
-              ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: AppSpacing.sm,
+                      children: [
+                        Text(
+                          '${entry.record.count}정',
+                          style: AppTypography.bodyStrong.copyWith(
+                            fontFeatures: AppTypography.tabular,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: '기록 삭제',
+                          color: AppColors.error,
+                          onPressed: () => delete(entry),
+                          icon: const Icon(Icons.delete_outline_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ],
         ),
       },
@@ -71,12 +83,18 @@ class _Thumbnail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const size = 48.0;
-    final placeholder = SizedBox.square(
-      dimension: size,
+    final placeholder = Container(
+      width: size,
+      height: size,
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceSunken,
+        borderRadius: BorderRadius.all(Radius.circular(AppRadius.sm)),
+      ),
       child: Icon(
         entry.record.photoPath == null
-            ? Icons.edit
-            : Icons.broken_image_outlined,
+            ? Icons.edit_rounded
+            : Icons.broken_image_rounded,
+        color: AppColors.inkMuted,
       ),
     );
     final photo = entry.photo;
@@ -84,7 +102,11 @@ class _Thumbnail extends StatelessWidget {
     return GestureDetector(
       onTap: () => showDialog<void>(
         context: context,
-        builder: (context) => Dialog(child: Image.memory(photo)),
+        builder: (context) => Dialog(
+          clipBehavior: Clip.antiAlias,
+          backgroundColor: AppColors.surfacePhoto,
+          child: Image.memory(photo),
+        ),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.sm),

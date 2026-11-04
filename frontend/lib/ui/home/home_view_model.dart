@@ -53,6 +53,15 @@ class HomeViewModel extends ChangeNotifier {
     return [for (final e in groups.entries) (e.key, e.value)];
   }
 
+  /// 지금 먹을 시간대: 아직 다 먹지 않은 일정 중 지금과 가장 가까운 시각. 없으면 null.
+  int? get currentTime {
+    final open = [
+      for (final s in summary.slots)
+        if (!s.isDone) s.time,
+    ];
+    return open.isEmpty ? null : nearestTime(open, minuteOfDay(_now()));
+  }
+
   String nameOf(int medicationId) =>
       medications.where((m) => m.id == medicationId).firstOrNull?.name ??
       '알 수 없는 약';

@@ -41,6 +41,27 @@ abstract final class AppRadius {
   static const xl = 28.0;
 }
 
+/// 간격. 기본 단위 4, 구조는 8의 배수. 화면 좌우 여백은 [gutter].
+abstract final class AppSpacing {
+  static const xxs = 4.0;
+  static const xs = 8.0;
+  static const sm = 12.0;
+  static const md = 16.0;
+  static const gutter = 20.0;
+  static const lg = 24.0;
+  static const xl = 32.0;
+  static const xxl = 48.0;
+}
+
+/// 본문 최대 폭. 웹·태블릿에서 가운데 둔다. 결과 사진만 [photo]까지 넓힌다.
+abstract final class AppLayout {
+  static const content = 560.0;
+  static const photo = 720.0;
+
+  /// 이보다 좁으면 작은 휴대폰: 좌우 여백 16, 기록하기 버튼은 아이콘만.
+  static const compact = 360.0;
+}
+
 /// 확인이 필요한 탐지 결과에 쓰는 색.
 const reviewColor = AppColors.review;
 
@@ -98,16 +119,40 @@ TextStyle _style(
   color: AppColors.ink,
 );
 
-// DESIGN.md typography. 본문은 17, 굵기는 400 / 600 / 700만 쓴다.
-final _largeTitle = _style(32, FontWeight.w700, 1.2, -0.8);
-final _title = _style(26, FontWeight.w700, 1.25, -0.6);
-final _headline = _style(21, FontWeight.w600, 1.3, -0.4);
-final _bodyStrong = _style(17, FontWeight.w600, 1.4, -0.3);
-final _body = _style(17, FontWeight.w400, 1.5, -0.3);
-final _callout = _style(15, FontWeight.w400, 1.45, -0.2);
-final _caption = _style(13, FontWeight.w400, 1.4, -0.1);
-final _captionStrong = _style(13, FontWeight.w600, 1.3, -0.1);
-final _button = _style(17, FontWeight.w600, 1.0, -0.3);
+/// DESIGN.md typography. 본문은 17, 굵기는 400 / 600 / 700만 쓴다.
+/// 화면에서는 대개 `Theme.of(context).textTheme`으로 쓰고, 테마에 자리가 없는
+/// [countDisplay], [boxLabel]과 고정폭 숫자([tabular])만 여기서 바로 쓴다.
+abstract final class AppTypography {
+  static final largeTitle = _style(32, FontWeight.w700, 1.2, -0.8);
+  static final title = _style(26, FontWeight.w700, 1.25, -0.6);
+  static final headline = _style(21, FontWeight.w600, 1.3, -0.4);
+  static final countDisplay = _style(
+    40,
+    FontWeight.w700,
+    1.0,
+    -1.0,
+  ).copyWith(fontFeatures: tabular);
+  static final bodyStrong = _style(17, FontWeight.w600, 1.4, -0.3);
+  static final body = _style(17, FontWeight.w400, 1.5, -0.3);
+  static final callout = _style(15, FontWeight.w400, 1.45, -0.2);
+  static final caption = _style(13, FontWeight.w400, 1.4, -0.1);
+  static final captionStrong = _style(13, FontWeight.w600, 1.3, -0.1);
+  static final button = _style(17, FontWeight.w600, 1.0, -0.3);
+  static final boxLabel = _style(12, FontWeight.w600, 1.0, 0);
+
+  /// 개수·시간·날짜에 쓰는 고정폭 숫자. 수량을 바꿀 때 글자가 흔들리지 않는다.
+  static const tabular = [FontFeature.tabularFigures()];
+}
+
+final _largeTitle = AppTypography.largeTitle;
+final _title = AppTypography.title;
+final _headline = AppTypography.headline;
+final _bodyStrong = AppTypography.bodyStrong;
+final _body = AppTypography.body;
+final _callout = AppTypography.callout;
+final _caption = AppTypography.caption;
+final _captionStrong = AppTypography.captionStrong;
+final _button = AppTypography.button;
 
 final _textTheme = TextTheme(
   displaySmall: _largeTitle,
@@ -122,7 +167,7 @@ final _textTheme = TextTheme(
   bodySmall: _caption.copyWith(color: AppColors.inkMuted),
   labelLarge: _button,
   labelMedium: _captionStrong,
-  labelSmall: _style(12, FontWeight.w600, 1.0, 0),
+  labelSmall: AppTypography.boxLabel,
 );
 
 const _stadium = StadiumBorder();
@@ -135,6 +180,18 @@ final _filledStyle = ButtonStyle(
   shape: const WidgetStatePropertyAll(_stadium),
   textStyle: WidgetStatePropertyAll(_button),
   elevation: const WidgetStatePropertyAll(0),
+);
+
+/// 보조 동작(`button-tonal`). 높이 44. 하단 바처럼 주 버튼과 나란히 둘 때는
+/// 높이를 맞추려고 쓰지 않는다.
+final tonalButtonStyle = FilledButton.styleFrom(
+  minimumSize: const Size(64, 44),
+  padding: const EdgeInsets.symmetric(horizontal: 18),
+);
+
+/// 삭제처럼 되돌릴 수 없는 동작(`button-text-destructive`). 채운 빨간 버튼은 만들지 않는다.
+final destructiveTextButtonStyle = TextButton.styleFrom(
+  foregroundColor: AppColors.error,
 );
 
 final appTheme = ThemeData(
@@ -161,6 +218,7 @@ final appTheme = ThemeData(
     color: AppColors.surface,
     elevation: 0,
     margin: EdgeInsets.zero,
+    clipBehavior: Clip.antiAlias,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.all(Radius.circular(AppRadius.lg)),
     ),
@@ -195,10 +253,18 @@ final appTheme = ThemeData(
       textStyle: _bodyStrong,
     ),
   ),
+  // button-icon: 44 원, 들어간 면 바탕에 잉크색 아이콘.
   iconButtonTheme: IconButtonThemeData(
     style: IconButton.styleFrom(
       minimumSize: const Size(44, 44),
+      maximumSize: const Size(44, 44),
+      padding: EdgeInsets.zero,
+      iconSize: 22,
+      backgroundColor: AppColors.surfaceSunken,
       foregroundColor: AppColors.ink,
+      disabledBackgroundColor: AppColors.surfaceSunken,
+      disabledForegroundColor: AppColors.inkDisabled,
+      shape: const CircleBorder(),
     ),
   ),
   floatingActionButtonTheme: FloatingActionButtonThemeData(

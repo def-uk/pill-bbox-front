@@ -558,7 +558,7 @@ pillbbox는 **한 손으로 찍고, 한눈에 확인하는** 앱입니다. 화�
 
 ## Flutter에 옮기기
 
-`lib/ui/common/theme.dart`의 `AppColors`, `AppRadius`, `appTheme`이 이 문서를 옮긴 것입니다. `ColorScheme.fromSeed`가 아니라 색을 직접 지정합니다. `fromSeed`는 톤을 자동으로 만들어서 로고 색과 정확히 맞지 않습니다.
+`lib/ui/common/theme.dart`의 `AppColors`, `AppRadius`, `AppSpacing`, `AppLayout`, `AppTypography`, `appTheme`이 이 문서를 옮긴 것이고, 여러 화면이 같이 쓰는 컴포넌트는 `lib/ui/common/widgets.dart`에 있습니다. `ColorScheme.fromSeed`가 아니라 색을 직접 지정합니다. `fromSeed`는 톤을 자동으로 만들어서 로고 색과 정확히 맞지 않습니다.
 
 | ColorScheme | 토큰 |
 |---|---|
@@ -579,6 +579,23 @@ pillbbox는 **한 손으로 찍고, 한눈에 확인하는** 앱입니다. 화�
 - 모든 컴포넌트 테마의 `elevation`은 0입니다. 브랜드 그림자는 FAB 테마로 줄 수 없어서(색을 못 바꿈) 기록하기 버튼을 `captureShadow`가 있는 `DecoratedBox`로 감쌉니다.
 - `filledButtonTheme`에는 색을 넣지 않습니다. 넣으면 `FilledButton.tonal`까지 바이올렛으로 칠해집니다. 색은 `ColorScheme`(`primary`, `secondaryContainer`)에서 옵니다.
 - 버튼 테마의 `shape`는 `StadiumBorder()`, 카드는 `RoundedRectangleBorder(borderRadius: 20)`.
+- 화면 코드에서 크기·간격 숫자를 직접 쓰지 않고 `AppSpacing`, `AppRadius`를 씁니다. 고정폭 숫자는 `AppTypography.tabular`.
+
+| 컴포넌트 | Flutter |
+|---|---|
+| `button-capture` | 홈의 `_CaptureButton` (작은 휴대폰에서는 아이콘만) |
+| `button-tonal` | `FilledButton.tonal` + `tonalButtonStyle` (하단 바 안에서는 높이 52) |
+| `button-text-destructive` | `TextButton` + `destructiveTextButtonStyle` |
+| `button-icon` | `IconButton` (테마가 들어간 면 원으로 칠함) |
+| `dose-card`, `dose-card-current` | 홈의 `_DoseCard` (`GroupCard(highlighted:)`) |
+| `status-dot-*` | `StatusDot` |
+| `empty-guide` | 홈의 `_EmptyGuide`, 다른 화면은 `EmptyState` |
+| `compare-summary(-review)` | 결과 화면의 `_CompareSummary` |
+| `result-row`, `count-stepper` | `_ResultRow`, `CountStepper` |
+| `detection-box(-review/-unknown)` | 결과 화면의 `_BoxPainter` (`_MarkKind`) |
+| `bottom-action-bar` | `BottomActionBar` |
+| `search-input` | `SearchField` |
+| 본문 최대 폭 560 / 사진 720 | `pagePadding`, `ContentWidth` |
 
 ## 반복 작업 안내
 
