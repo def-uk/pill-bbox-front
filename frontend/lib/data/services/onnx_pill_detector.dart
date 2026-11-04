@@ -17,7 +17,7 @@ external JSPromise<JSArray<_Box>> _detect(
   JSNumber minConfidence,
 );
 
-/// web/pill_detector.js가 돌려주는 박스. 좌표는 원본 이미지 픽셀이다.
+/// web/pill_detector_worker.js가 돌려주는 박스. 좌표는 원본 이미지 픽셀이다.
 extension type _Box(JSObject _) implements JSObject {
   external double get x1;
   external double get y1;
@@ -27,7 +27,8 @@ extension type _Box(JSObject _) implements JSObject {
   external int get classIndex;
 }
 
-/// 브라우저에서 onnxruntime-web으로 추론한다. 실제 추론은 web/pill_detector.js가 한다.
+/// 브라우저에서 onnxruntime-web으로 추론한다. 실제 추론은 web/pill_detector.js가 띄운 Web Worker
+/// (web/pill_detector_worker.js)가 하므로 그동안 화면이 멈추지 않는다.
 class OnnxPillDetector implements PillDetector {
   OnnxPillDetector({required this.modelAsset, required this._labels});
 

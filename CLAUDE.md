@@ -46,4 +46,4 @@ docs/       설계 문서
 - `lib/data/models/` 모델, `lib/data/repositories/` 저장소, `lib/data/services/` 탐지·사진 선택(image_picker)·DB(sqflite) 등 서비스
 - `lib/utils/` 공용 함수
 
-탐지 모델은 `scripts/fetch_model.sh`로 `assets/models/`에 받습니다(Git 제외). 받으면 앱은 `YoloPillDetector`(`ultralytics_yolo`), 웹은 `OnnxPillDetector`(`web/pill_detector.js`, onnxruntime-web), 받지 않으면 `FakePillDetector`가 쓰입니다. 플랫폼별 서비스는 `platform_services.dart` / `platform_services_web.dart`에서 조건부 import로 고릅니다. 지금 버전은 `combofix-v1-fold1-w8`(`yolo11m`, 약 96종, 가중치 int8)입니다.
+탐지 모델은 `scripts/fetch_model.sh`로 `assets/models/`에 받습니다(Git 제외). 받으면 앱은 `YoloPillDetector`(`ultralytics_yolo`), 웹은 `OnnxPillDetector`(`web/pill_detector.js`가 띄운 Web Worker `web/pill_detector_worker.js`, onnxruntime-web), 받지 않으면 `FakePillDetector`가 쓰입니다. 플랫폼별 서비스는 `platform_services.dart` / `platform_services_web.dart`에서 조건부 import로 고릅니다. 지금 버전은 `combofix-v1-fold1-w8`(`yolo11m`, 약 96종, 가중치 int8)입니다.
