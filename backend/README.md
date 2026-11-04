@@ -57,7 +57,7 @@ pillbbox 앱의 사진을 모아 탐지 모델을 개선하고, 약·복용 기�
 | 패키지 | [uv](https://docs.astral.sh/uv/) (`uv.lock`으로 고정) | 모델 스크립트에서 이미 씀. 맥미니에서 `uv sync --frozen` 한 줄로 같은 환경 |
 | DB | SQLite + SQLAlchemy 2.0 | 맥미니 한 대라 DB 서버가 필요 없음. 파일 하나라 백업이 쉬움 |
 | 사진 | DB 밖 파일 (`samples/<연-월>/<id>.jpg`) | 장당 약 20KB. 하루 1,000장이어도 20MB |
-| 바깥 공개 | Cloudflare Tunnel | 팀이 이미 Cloudflare를 씀. 공유기 포트를 열지 않고 HTTPS 주소가 생김. GitHub Pages(HTTPS)에서 부르려면 API도 HTTPS여야 함 |
+| 바깥 공개 | Cloudflare Tunnel (맥미니에 이미 있는 터널에 호스트 이름 추가) | 맥미니에 다른 프로젝트용 터널과 cloudflared가 이미 있음. 공유기 포트를 열지 않고 HTTPS 주소가 생김. GitHub Pages(HTTPS)에서 부르려면 API도 HTTPS여야 함 |
 | 배포 | `main`에 합치면 GitHub Actions가 SSH로 맥미니에 들어가 `git pull` 후 `deploy.sh` (5장) | 맥미니에 따로 프로그램을 띄워 둘 필요가 없음. GitHub가 제공하는 러너에서 돌고 `main` push에만 돌아, public 저장소여도 PR 코드가 맥미니에서 돌지 않음 |
 
 ## 3. API
@@ -290,7 +290,7 @@ DB 테이블은 셋입니다.
 
 ```bash
 # 1. 도구
-brew install uv git cloudflared
+brew install uv git          # cloudflared와 터널은 이미 있음
 
 # 2. 배포용 클론과 데이터 폴더. 클론은 첫 배포 때 워크플로가 만들어도 됨
 mkdir -p ~/srv ~/srv/pillbbox-data/{data,backups,logs}
@@ -310,7 +310,7 @@ cat ~/pillbbox-deploy.pub >> ~/.ssh/authorized_keys
 curl https://pillbbox-api.<도메인>/health
 ```
 
-맥미니에 이미 Cloudflare Tunnel이 있으면 그 터널에 호스트 이름만 더하고, 없으면 Zero Trust 대시보드에서 터널을 새로 만들어 맥미니에 `cloudflared service install <토큰>`으로 설치합니다. 터널을 어떻게 만들었는지에 따라 호스트 이름을 더하는 방법이 다릅니다.
+맥미니에는 다른 프로젝트용으로 만든 터널이 이미 있습니다. 터널 하나에 호스트 이름을 여러 개 둘 수 있으므로, 새 터널을 만들지 않고 그 터널에 `pillbbox-api.<도메인>`만 더합니다. 기존 호스트 이름은 건드리지 않습니다. 터널을 어떻게 만들었는지에 따라 더하는 방법이 다릅니다.
 
 - **대시보드에서 만든 터널**(`cloudflared service install <토큰>`으로 설치): Cloudflare Zero Trust → Networks → Tunnels → 그 터널 → Public Hostname 추가. 호스트 이름 `pillbbox-api.<도메인>`, 서비스 `http://localhost:8100`. 맥미니에서 할 일은 없습니다.
 - **설정 파일로 만든 터널**(`~/.cloudflared/config.yml`): `ingress`의 맨 끝(`service: http_status:404`) **앞에** 한 줄을 더하고, DNS를 잇고, cloudflared를 다시 띄웁니다.
@@ -483,6 +483,6 @@ fvm flutter run -d chrome --web-port 8080 --dart-define=API_BASE_URL=http://loca
 | 사진 보관 기간 | 1년. 검수해 학습 데이터로 옮긴 사진은 모델 저장소 규칙을 따름 | 팀 |
 | 수집 동의 문구 | 4.3의 항목. 팀 밖 사람에게 열기 전에 개인정보 처리방침과 민감정보 동의가 법에 맞는지 확인 | 팀 |
 | 검수 도구 | 처음에는 내보낸 폴더를 직접 봄. 많아지면 Label Studio 같은 도구 | 모델 팀 |
-| 바깥 공개 방법 | Cloudflare Tunnel에 `pillbbox-api.<도메인>` 추가. 도메인과 호스트 이름은 정해야 함 | 팀 |
+| 바깥 공개 방법 | 맥미니의 기존 Cloudflare Tunnel에 `pillbbox-api.<도메인>` 추가. 그 터널을 지우거나 옮기면 이 서버도 끊기므로, 다른 프로젝트와 따로 관리하고 싶으면 이 저장소용 터널을 새로 만듦(cloudflared 하나로 터널 둘을 돌릴 수 있음). 도메인은 터널과 같은 Cloudflare 계정에 있어야 함 | 팀 |
 | 건강 정보 보관 | 맥미니 FileVault + 코드 해시만 저장. 서버 데이터는 암호화하지 않음. 백업은 필요하면 앱에서 코드로 암호화해 올릴 수 있음(종단 간 암호화). 사진은 학습에 써야 하므로 서버가 읽을 수 있어야 함. Cloudflare Tunnel은 Cloudflare에서 HTTPS를 풀었다가 다시 감싸므로, 사진과 백업이 Cloudflare를 지남. 수집 동의 화면의 "어디에"에 적음 | 팀 |
 | 엑셀 백업을 남길지 | 남김. 서버 없이도 쓸 수 있고, 서버를 내려도 데이터를 옮길 수 있음 | 팀 |
