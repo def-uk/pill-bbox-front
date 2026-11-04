@@ -407,37 +407,45 @@ class _PhotoWithBoxesState extends State<_PhotoWithBoxes> {
   Widget build(BuildContext context) {
     final size = _size;
     if (size == null) return const AspectRatio(aspectRatio: 4 / 3);
-    final primary = Theme.of(context).colorScheme.primary;
-    final unknownColor = Theme.of(context).colorScheme.tertiary;
-    return AspectRatio(
-      aspectRatio: size.width / size.height,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image(image: _image, fit: BoxFit.fill, gaplessPlayback: true),
-          CustomPaint(
-            painter: _BoxPainter(
-              photoSize: size,
-              marks: [
-                for (final d in widget.vm.detections)
-                  (
-                    d.box,
-                    '${d.name} ${(d.confidence * 100).round()}%',
-                    primary,
+    // 사진 액자: 검은 바탕, 둥글기 lg (DESIGN.md photo-frame).
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
+        child: ColoredBox(
+          color: AppColors.surfacePhoto,
+          child: AspectRatio(
+            aspectRatio: size.width / size.height,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image(image: _image, fit: BoxFit.fill, gaplessPlayback: true),
+                CustomPaint(
+                  painter: _BoxPainter(
+                    photoSize: size,
+                    marks: [
+                      for (final d in widget.vm.detections)
+                        (
+                          d.box,
+                          '${d.name} ${(d.confidence * 100).round()}%',
+                          false,
+                        ),
+                      for (final o in widget.vm.unknowns)
+                        (o.box, '물체 ${o.number}', true),
+                    ],
                   ),
-                for (final o in widget.vm.unknowns)
-                  (o.box, '물체 ${o.number}', unknownColor),
+                ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-/// 박스 하나: 원본 이미지 픽셀 좌표, 이름표, 색.
-typedef _Mark = (Rect box, String label, Color color);
+/// 박스 하나: 원본 이미지 픽셀 좌표, 이름표, 알 수 없는 물체인지.
+typedef _Mark = (Rect box, String label, bool unknown);
 
 class _BoxPainter extends CustomPainter {
   // 웹은 한글 글꼴을 필요할 때 받는다. 받은 뒤 다시 그리지 않으면 약 이름 일부가 □로 남는다.
@@ -451,33 +459,86 @@ class _BoxPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final scaleX = size.width / photoSize.width;
     final scaleY = size.height / photoSize.height;
-    for (final (box, text, color) in marks) {
+    for (final (box, text, unknown) in marks) {
       final rect = Rect.fromLTRB(
         box.left * scaleX,
         box.top * scaleY,
         box.right * scaleX,
         box.bottom * scaleY,
       );
-      canvas.drawRect(
+      final shape = RRect.fromRectAndRadius(
         rect,
+        const Radius.circular(AppRadius.xs),
+      );
+      // 어떤 사진 위에서도 보이도록 바깥에 대비되는 선을 한 겹 더 두른다.
+      canvas.drawRRect(
+        shape.inflate(1.5),
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2
-          ..color = color,
+          ..strokeWidth = 1
+          ..color = unknown ? AppColors.ink : AppColors.surface,
       );
-      final label = TextPainter(
-        text: TextSpan(
-          text: ' $text ',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            backgroundColor: color,
-          ),
+      final stroke = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = unknown ? AppColors.cream : AppColors.primary;
+      if (unknown) {
+        // 알 수 없는 물체는 색이 아니라 점선으로도 구분한다.
+        _drawDashed(canvas, Path()..addRRect(shape), stroke);
+      } else {
+        canvas.drawRRect(shape, stroke);
+      }
+      _drawLabel(canvas, size, rect, text, unknown);
+    }
+  }
+
+  void _drawLabel(
+    Canvas canvas,
+    Size size,
+    Rect rect,
+    String text,
+    bool unknown,
+  ) {
+    final label = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: unknown ? AppColors.ink : AppColors.onPrimary,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          height: 1.0,
         ),
-        textDirection: TextDirection.ltr,
-      )..layout(maxWidth: size.width);
-      final top = rect.top - label.height;
-      label.paint(canvas, Offset(rect.left, top < 0 ? rect.top : top));
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: size.width - 16);
+    const padding = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
+    final width = label.width + padding.horizontal;
+    final height = label.height + padding.vertical;
+    final above = rect.top - height - 4;
+    final left = rect.left.clamp(
+      0.0,
+      (size.width - width).clamp(0.0, size.width),
+    );
+    final pill = Rect.fromLTWH(
+      left,
+      above < 0 ? rect.top + 4 : above,
+      width,
+      height,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(pill, Radius.circular(height / 2)),
+      Paint()..color = unknown ? AppColors.cream : AppColors.primary,
+    );
+    label.paint(canvas, pill.topLeft + Offset(padding.left, padding.top));
+  }
+
+  static void _drawDashed(Canvas canvas, Path path, Paint paint) {
+    const dash = 6.0;
+    const gap = 4.0;
+    for (final metric in path.computeMetrics()) {
+      for (var d = 0.0; d < metric.length; d += dash + gap) {
+        canvas.drawPath(metric.extractPath(d, d + dash), paint);
+      }
     }
   }
 

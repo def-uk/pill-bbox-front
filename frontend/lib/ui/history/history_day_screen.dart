@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../data/models/intake_record.dart';
 import '../../utils/time_format.dart';
 import '../common/medication_picker.dart';
+import '../common/theme.dart';
 import 'history_day_view_model.dart';
 
 class HistoryDayScreen extends StatelessWidget {
@@ -86,7 +87,7 @@ class _Thumbnail extends StatelessWidget {
         builder: (context) => Dialog(child: Image.memory(photo)),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         child: Image.memory(
           photo,
           width: size,
