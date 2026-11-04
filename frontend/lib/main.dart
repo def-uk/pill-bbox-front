@@ -101,3 +101,6 @@ class _PillboxAppState extends State<PillboxApp> {
     );
   }
 }
+
+// CI 검증용(docs/CICD.md 3장 시나리오 3). 머지하지 않는다.
+const int ciProbe = 'not an int';
