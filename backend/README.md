@@ -247,7 +247,7 @@ pillbbox 앱의 사진을 모아 탐지 모델을 개선하고, 약·복용 기�
 ```text
 backend/
 ├── README.md               # 이 문서
-├── pyproject.toml          # fastapi, uvicorn, sqlalchemy, pydantic-settings / dev: pytest, httpx, ruff
+├── pyproject.toml          # fastapi, uvicorn, sqlalchemy, pydantic-settings, python-multipart, pillow / dev: pytest, httpx2, ruff
 ├── uv.lock
 ├── .python-version         # 3.12
 ├── .env.example
@@ -258,11 +258,15 @@ backend/
 │   ├── models.py           # vaults, backups, samples 테이블
 │   ├── schemas.py          # 백업 JSON (3.2), 사진 라벨 JSON (4.2)
 │   ├── auth.py             # 동기화 코드 만들기·검사
+│   ├── photos.py           # JPEG 검사, EXIF 지우기
 │   └── api.py              # /v1 라우터
 ├── scripts/
 │   └── export_yolo.py      # 모은 사진을 YOLO 학습 데이터로 (4.5)
 ├── tests/
-│   └── test_api.py         # TestClient로 보관함 → PUT → 412 → GET, 사진 올리기·지우기
+│   ├── test_vaults.py      # 코드, 401, 생성 제한, 보관함 지우기, 본문 크기
+│   ├── test_backup.py      # PUT → 412 → GET, 리비전 10개
+│   ├── test_samples.py     # 사진 올리기·지우기, EXIF, 같은 id
+│   └── test_export_yolo.py
 └── deploy/
     ├── com.pillbbox.api.plist      # uvicorn을 띄우는 launchd 에이전트
     ├── deploy.sh                   # 의존성 맞추고 재시작, /health 확인, 실패하면 되돌림
@@ -341,7 +345,7 @@ curl https://pillbbox-api.<도메인>/health
 <array>
   <string>/opt/homebrew/bin/uv</string>
   <string>run</string><string>--frozen</string><string>--env-file</string><string>/Users/<사용자>/srv/pillbbox-data/.env</string>
-  <string>uvicorn</string><string>app.main:app</string>
+  <string>uvicorn</string><string>app.main:create_app</string><string>--factory</string>
   <string>--host</string><string>127.0.0.1</string><string>--port</string><string>8100</string>
 </array>
 <key>WorkingDirectory</key><string>/Users/<사용자>/srv/pillbbox/backend</string>
@@ -447,7 +451,7 @@ jobs:
 cd backend
 uv sync
 cp .env.example .env
-uv run uvicorn app.main:app --reload --env-file .env   # http://localhost:8000/docs
+uv run uvicorn app.main:create_app --factory --reload --env-file .env   # http://localhost:8000/docs
 uv run pytest
 uv run ruff check . && uv run ruff format .
 ```
