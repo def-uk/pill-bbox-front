@@ -57,5 +57,8 @@ jobs:
               git clone ${{ github.server_url }}/${{ github.repository }}.git ~/srv/pillbbox
             fi
             cd ~/srv/pillbbox
+            # 다른 브랜치로 받아 둔 클론이어도 main으로 맞춘다. main이 없으면 origin/main을 따라 만든다
+            git fetch origin main
+            git switch main
             git pull --ff-only origin main
             bash backend/deploy/deploy.sh
