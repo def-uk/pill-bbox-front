@@ -36,12 +36,12 @@ void main() {
     await pumpUntilFound(tester, find.text('만 14세 이상인가요?'));
 
     await tester.tap(find.text('네, 만 14세 이상이에요'));
-    await pumpUntilFound(tester, find.text('복용 시간 정하기'));
+    await pumpUntilFound(tester, find.text('오늘 기록이 없습니다'));
 
     // 앱을 다시 열어도 묻지 않는다.
     await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(app());
-    await pumpUntilFound(tester, find.text('복용 시간 정하기'));
+    await pumpUntilFound(tester, find.text('오늘 기록이 없습니다'));
     expect(find.text('만 14세 이상인가요?'), findsNothing);
 
     // 더 보기 → 앱 안내

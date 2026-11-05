@@ -56,6 +56,19 @@ void main() {
     expect(await intakes.recordsOn(DateTime(2026, 10, 31)), isEmpty);
   });
 
+  test('최근 기록은 최근 것부터 limit개만 준다', () async {
+    final intakes = repository();
+    final a = await addMedication('A');
+    for (var day = 25; day <= 29; day++) {
+      now = DateTime(2026, 10, day, 8);
+      await intakes.addManualIntake(medicationId: a, count: day - 24);
+    }
+
+    final recent = await intakes.recentRecords(limit: 3);
+    expect([for (final r in recent) r.count], [5, 4, 3]);
+    expect(recent.first.takenAt, DateTime(2026, 10, 29, 8));
+  });
+
   test('저장에 실패하면 사진을 지운다', () async {
     await expectLater(
       repository().addCameraIntake(

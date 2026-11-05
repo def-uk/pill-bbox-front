@@ -95,7 +95,14 @@ class HomeScreen extends StatelessWidget {
     );
 
     final List<Widget> today = vm.isEmpty
-        ? [_EmptyGuide(onSetSchedule: () => context.go('/medications'))]
+        ? [
+            _RecentRecords(
+              records: vm.recent,
+              nameOf: vm.nameOf,
+              onSeeAll: () => context.go('/history'),
+              onTap: (r) => context.push('/history/${dateKey(r.takenAt)}'),
+            ),
+          ]
         : [
             const SectionLabel('오늘의 퀘스트'),
             for (final (i, (time, slots)) in vm.slotsByTime.indexed) ...[
@@ -118,22 +125,10 @@ class HomeScreen extends StatelessWidget {
                     title: vm.summary.slots.isEmpty ? '오늘 기록' : '일정 외 기록',
                   ),
                   for (final record in vm.summary.unscheduled)
-                    _Row(
-                      leading: Icon(
-                        record.source == IntakeSource.camera
-                            ? Icons.photo_camera_rounded
-                            : Icons.edit_rounded,
-                        size: 22,
-                        color: AppColors.inkMuted,
-                      ),
-                      title: vm.nameOf(record.medicationId),
-                      subtitle: formatTime(record.takenAt),
-                      trailing: Text(
-                        '${record.count}정',
-                        style: AppTypography.bodyStrong.copyWith(
-                          fontFeatures: AppTypography.tabular,
-                        ),
-                      ),
+                    _RecordRow(
+                      record: record,
+                      name: vm.nameOf(record.medicationId),
+                      when: formatTime(record.takenAt),
                     ),
                 ],
               ),
@@ -518,11 +513,57 @@ class _KindPrompt extends StatelessWidget {
   }
 }
 
-/// 오늘 기록도 일정도 없을 때(`empty-guide`). 무엇을 하면 되는지와 잘 찍는 법을 함께 보여 준다.
-class _EmptyGuide extends StatelessWidget {
-  const _EmptyGuide({required this.onSetSchedule});
+/// 기록 한 줄: 사진/직접 아이콘, 약 이름, 시각, 개수.
+class _RecordRow extends StatelessWidget {
+  const _RecordRow({
+    required this.record,
+    required this.name,
+    required this.when,
+    this.onTap,
+  });
 
-  final VoidCallback onSetSchedule;
+  final IntakeRecord record;
+  final String name;
+  final String when;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Row(
+      leading: Icon(
+        record.source == IntakeSource.camera
+            ? Icons.photo_camera_rounded
+            : Icons.edit_rounded,
+        size: 22,
+        color: AppColors.inkMuted,
+      ),
+      title: name,
+      subtitle: when,
+      trailing: Text(
+        '${record.count}정',
+        style: AppTypography.bodyStrong.copyWith(
+          fontFeatures: AppTypography.tabular,
+        ),
+      ),
+      onTap: onTap,
+    );
+  }
+}
+
+/// 오늘 일정도 기록도 없을 때. 최근 기록만 보여 준다. 일정 정하기는 약 관리 탭, 찍는 법은 기록하기 시트에 있다.
+class _RecentRecords extends StatelessWidget {
+  const _RecentRecords({
+    required this.records,
+    required this.nameOf,
+    required this.onSeeAll,
+    required this.onTap,
+  });
+
+  /// 최근 것부터.
+  final List<IntakeRecord> records;
+  final String Function(int medicationId) nameOf;
+  final VoidCallback onSeeAll;
+  final void Function(IntakeRecord) onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -534,55 +575,38 @@ class _EmptyGuide extends StatelessWidget {
         Text('오늘 기록이 없습니다', style: textTheme.headlineMedium),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          '아래 기록하기를 눌러 알약 사진을 찍거나 올리면 인식한 약이 바로 기록됩니다. '
-          '사진이 없으면 샘플 사진으로 해 볼 수 있어요.',
+          '아래 기록하기로 알약 사진을 찍어 보세요',
           style: textTheme.bodyLarge?.copyWith(color: AppColors.inkMuted),
         ),
-        const SizedBox(height: AppSpacing.md),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: FilledButton.tonal(
-            style: tonalButtonStyle,
-            onPressed: onSetSchedule,
-            child: const Text('복용 시간 정하기'),
+        if (records.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.lg),
+          GroupCard(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.gutter,
+                  AppSpacing.xs,
+                  AppSpacing.xxs,
+                  0,
+                ),
+                child: Row(
+                  children: [
+                    Text('최근 기록', style: AppTypography.headline),
+                    const Spacer(),
+                    TextButton(onPressed: onSeeAll, child: const Text('전체 보기')),
+                  ],
+                ),
+              ),
+              for (final record in records)
+                _RecordRow(
+                  record: record,
+                  name: nameOf(record.medicationId),
+                  when: formatMonthDayTime(record.takenAt),
+                  onTap: () => onTap(record),
+                ),
+            ],
           ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        DecoratedBox(
-          decoration: const BoxDecoration(
-            color: AppColors.surfaceSunken,
-            borderRadius: BorderRadius.all(Radius.circular(AppRadius.lg)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('이렇게 찍어 주세요', style: textTheme.titleMedium),
-                const SizedBox(height: AppSpacing.sm),
-                for (final (icon, text) in const [
-                  (Icons.crop_square_rounded, '단색 배경 위에 놓기'),
-                  (Icons.photo_camera_rounded, '바로 위에서 수직으로 찍기'),
-                  (Icons.scatter_plot_rounded, '알약끼리 떨어지게 놓기'),
-                ])
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppSpacing.xxs,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(icon, size: 22, color: AppColors.primary),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Text(text, style: textTheme.bodyMedium),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
+        ],
       ],
     );
   }

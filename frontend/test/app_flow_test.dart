@@ -26,12 +26,10 @@ void main() {
       ),
     );
     await passAgeGate(tester);
-    await pumpUntilFound(tester, find.text('복용 시간 정하기'));
+    await pumpUntilFound(tester, find.text('오늘 기록이 없습니다'));
 
     // 약 등록: 샘플약 A, 1회 2정, 08:00
-    await tester.ensureVisible(find.text('복용 시간 정하기'));
-    await tester.pump();
-    await tester.tap(find.text('복용 시간 정하기'));
+    await tester.tap(find.text('약 관리'));
     await pumpUntilFound(tester, find.text('등록한 약이 없습니다'));
     await tester.tap(find.text('약 등록'));
     await pumpUntilFound(tester, find.text('약을 고르세요'));

@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
+import '../../data/models/intake_record.dart';
 import '../../data/models/medication.dart';
 import '../../data/repositories/backup_repository.dart';
 import '../../data/repositories/collection_repository.dart';
@@ -49,6 +50,9 @@ class HomeViewModel extends ChangeNotifier {
   List<Medication> medications = const [];
   DaySummary summary = const DaySummary(slots: [], unscheduled: []);
   RewardState rewards = RewardState.empty;
+
+  /// 가장 최근 기록 [recentLimit]개. 최근 것부터. 오늘 기록이 없을 때 홈에 보여 준다.
+  List<IntakeRecord> recent = const [];
 
   /// 몬스터 생김새. prescription_id → 생김새(모르면 null).
   Map<int, MonsterLook?> monsterLooks = const {};
@@ -143,6 +147,9 @@ class HomeViewModel extends ChangeNotifier {
   /// 회차 몇 분 전부터 알림 카드를 보여 줄지.
   static const reminderLeadMinutes = 10;
 
+  /// 홈에 보여 줄 최근 기록 수.
+  static const recentLimit = 5;
+
   String nameOf(int medicationId) =>
       medications.where((m) => m.id == medicationId).firstOrNull?.name ??
       '알 수 없는 약';
@@ -151,6 +158,7 @@ class HomeViewModel extends ChangeNotifier {
     final now = _now();
     final medications = await _medications.getAll();
     final records = await _intakes.recordsOn(now);
+    final recent = await _intakes.recentRecords(limit: recentLimit);
     final prescriptions = await _prescriptions.scheduledOn(now);
     final rewards = await _rewards.current();
     final equipment = await _collection.equipment();
@@ -169,6 +177,7 @@ class HomeViewModel extends ChangeNotifier {
     if (_disposed) return;
     today = now;
     this.medications = medications;
+    this.recent = recent;
     this.rewards = rewards;
     monsterLooks = looks;
     this.equipment = equipment;
