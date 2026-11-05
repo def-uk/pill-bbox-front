@@ -103,7 +103,7 @@ class _PillboxAppState extends State<PillboxApp> {
         ),
       ],
       child: MaterialApp.router(
-        title: 'Pillbbox',
+        title: '알약몬',
         theme: appTheme,
         locale: const Locale('ko'),
         supportedLocales: const [Locale('ko')],

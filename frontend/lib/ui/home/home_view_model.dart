@@ -97,7 +97,7 @@ class HomeViewModel extends ChangeNotifier {
 
   /// 약·기록을 엑셀로 내보낸다. 저장했으면 true.
   Future<bool> exportExcel() async => _backupFiles.save(
-    'pillbbox-${dateKey(_now())}.xlsx',
+    '알약몬-${dateKey(_now())}.xlsx',
     await _backup.exportExcel(),
   );
 

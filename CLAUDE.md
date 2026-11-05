@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-알약 사진 한 장으로 복용 기록을 남기는 Flutter 앱입니다. 목적, 화면, 아키텍처, 개발 순서는 [docs/DESIGN.md](docs/DESIGN.md)에 있습니다.
+알약몬(이전 이름 먹었약)은 알약 사진 한 장으로 복용 기록을 남기는 Flutter 앱입니다. 목적, 화면, 아키텍처, 개발 순서는 [docs/DESIGN.md](docs/DESIGN.md)에 있습니다.
 
 ## Git 작업 규칙
 
