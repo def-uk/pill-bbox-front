@@ -3,9 +3,11 @@ import 'dart:typed_data';
 import '../../utils/time_format.dart';
 import '../../utils/xlsx.dart';
 import '../models/appearance.dart';
+import '../models/cosmetic.dart';
 import '../models/intake_record.dart';
 import '../models/medication.dart';
 import '../models/prescription.dart';
+import 'collection_repository.dart';
 import 'intake_repository.dart';
 import 'medication_repository.dart';
 import 'prescription_repository.dart';
@@ -24,16 +26,30 @@ typedef ImportSummary = ({
 /// 그대로 두되 종류를 고르지 않은 약이면 파일의 종류를 넣는다. 기록은 같은 약·시각·개수면,
 /// 처방은 시작일·일수·약이 모두 같으면 건너뛴다.
 class BackupRepository {
-  BackupRepository(this._medications, this._intakes, this._prescriptions);
+  BackupRepository(
+    this._medications,
+    this._intakes,
+    this._prescriptions,
+    this._collection,
+  );
 
   final MedicationRepository _medications;
   final IntakeRepository _intakes;
   final PrescriptionRepository _prescriptions;
+  final CollectionRepository _collection;
 
   static const medicationSheet = '약';
   static const recordSheet = '기록';
   static const appearanceSheet = '색·모양';
   static const prescriptionSheet = '처방';
+  static const drawSheet = '뽑기';
+  static const characterSheet = '캐릭터';
+
+  /// 뽑기 기록. 뽑기 결과는 기록에서 다시 셀 수 없어 백업에 넣는다 (DB 버전 6).
+  static const _drawHeader = ['아이템', '얻은 시각'];
+
+  /// 장착. 펫은 '처방' 시트의 처방 번호다.
+  static const _characterHeader = ['스킨', '액세서리', '펫 처방'];
 
   /// 앞 네 칸은 처음부터 있던 칸이라 머리글을 맞춰 본다. 종류·하루 기준량은 DB 버전 4에 더했다.
   static const _medicationHeader = ['이름', '약 번호', '1회 개수', '복용 시간'];
@@ -60,6 +76,11 @@ class BackupRepository {
 
   Future<Uint8List> exportExcel() async {
     final medications = await _medications.getAll();
+    final prescriptions = await _prescriptions.getAll();
+    final equipment = await _collection.equipment();
+    final petNumber = prescriptions.indexWhere(
+      (p) => p.id == equipment.petPrescriptionId,
+    );
     final names = {for (final m in medications) m.id: m.name};
     return encodeXlsx({
       medicationSheet: [
@@ -91,7 +112,7 @@ class BackupRepository {
       ],
       prescriptionSheet: [
         [..._prescriptionHeader, ..._prescriptionExtraHeader],
-        for (final (i, p) in (await _prescriptions.getAll()).indexed)
+        for (final (i, p) in prescriptions.indexed)
           for (final item in p.items)
             [
               i + 1,
@@ -103,6 +124,19 @@ class BackupRepository {
               item.times.map(formatMinuteOfDay).join(', '),
               p.endedOn == null ? null : dateKey(p.endedOn!),
             ],
+      ],
+      drawSheet: [
+        _drawHeader,
+        for (final (id, at) in await _collection.draws())
+          [id, _formatDateTime(at)],
+      ],
+      characterSheet: [
+        _characterHeader,
+        [
+          equipment.skin?.id,
+          equipment.accessory?.id,
+          petNumber < 0 ? null : petNumber + 1,
+        ],
       ],
     });
   }
@@ -213,11 +247,37 @@ class BackupRepository {
       );
     }
 
-    final addedPrescriptions = await _importPrescriptions(
+    final (addedPrescriptions, prescriptionIds) = await _importPrescriptions(
       prescriptionRows,
       byName,
       onSkip: () => skipped++,
     );
+
+    if (sheets.containsKey(drawSheet)) {
+      final draws = <(String, DateTime)>[];
+      for (final row in _rows(sheets, drawSheet, _drawHeader)) {
+        final id = _string(row, 0);
+        final at = _dateTime(_cell(row, 1));
+        if (Cosmetic.byId(id) == null || at == null) {
+          skipped++;
+          continue;
+        }
+        draws.add((id!, at));
+      }
+      await _collection.importDraws(draws);
+    }
+    if (sheets.containsKey(characterSheet)) {
+      final row = _rows(sheets, characterSheet, _characterHeader).firstOrNull;
+      if (row != null) {
+        await _collection.importEquipment(
+          Equipment(
+            skin: Cosmetic.byId(_string(row, 0)),
+            accessory: Cosmetic.byId(_string(row, 1)),
+            petPrescriptionId: prescriptionIds[_int(row, 2)],
+          ),
+        );
+      }
+    }
 
     return (
       medications: addedMedications,
@@ -227,8 +287,9 @@ class BackupRepository {
     );
   }
 
-  /// 처방 행을 처방 번호로 묶어 등록한다. 읽을 수 없는 행은 [onSkip]. 등록한 처방 수를 돌려준다.
-  Future<int> _importPrescriptions(
+  /// 처방 행을 처방 번호로 묶어 등록한다. 읽을 수 없는 행은 [onSkip].
+  /// 등록한 처방 수와, 파일의 처방 번호 → 이 기기의 처방 id(이미 있던 같은 처방 포함)를 돌려준다.
+  Future<(int, Map<int, int>)> _importPrescriptions(
     List<List<Object?>> rows,
     Map<String, int> medicationIds, {
     required void Function() onSkip,
@@ -293,21 +354,27 @@ class BackupRepository {
 
     final known = {
       for (final p in await _prescriptions.getAll())
-        _signature(p.startDate, p.days, p.items),
+        _signature(p.startDate, p.days, p.items): p.id,
     };
     var added = 0;
-    for (final p in groups.values) {
-      if (!known.add(_signature(p.startDate, p.days, p.items))) continue;
-      await _prescriptions.save(
+    final ids = <int, int>{};
+    for (final MapEntry(key: number, value: p) in groups.entries) {
+      final signature = _signature(p.startDate, p.days, p.items);
+      if (known[signature] case final id?) {
+        ids[number] = id;
+        continue;
+      }
+      final id = await _prescriptions.save(
         startDate: p.startDate,
         days: p.days,
         items: p.items,
         status: p.status,
         endedOn: p.endedOn,
       );
+      known[signature] = ids[number] = id;
       added++;
     }
-    return added;
+    return (added, ids);
   }
 
   /// 같은 처방인지 볼 때 쓰는 값: 시작일, 일수, 약마다 1회 알 수와 회차 시간.

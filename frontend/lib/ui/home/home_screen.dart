@@ -43,6 +43,12 @@ class HomeScreen extends StatelessWidget {
     final header = [
       StageCard(
         growth: vm.growth,
+        skinId: vm.equipment.skin?.id,
+        accessoryId: vm.equipment.accessory?.id,
+        pet: vm.pet,
+        tickets: vm.tickets,
+        onCollection: () => context.push('/collection'),
+        onDraw: () => context.push('/draw'),
         monsters: vm.activeMonsters,
         looks: vm.monsterLooks,
         today: vm.today,

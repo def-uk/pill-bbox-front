@@ -177,7 +177,24 @@ class StageCard extends StatelessWidget {
     required this.looks,
     required this.today,
     required this.onTapMonster,
+    this.skinId,
+    this.accessoryId,
+    this.pet,
+    this.tickets = 0,
+    this.onCollection,
+    this.onDraw,
   });
+
+  final String? skinId;
+  final String? accessoryId;
+
+  /// 데리고 다니는 펫: (처방 id, 생김새).
+  final (int, MonsterLook?)? pet;
+
+  /// 쓸 수 있는 뽑기권.
+  final int tickets;
+  final VoidCallback? onCollection;
+  final VoidCallback? onDraw;
 
   final Growth growth;
   final List<MonsterState> monsters;
@@ -212,15 +229,21 @@ class StageCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                CharacterArt(stage: growth.stage, size: compact ? 96 : 124),
+                CharacterWithPet(
+                  stageExp: growth.exp,
+                  skinId: skinId,
+                  accessoryId: accessoryId,
+                  pet: pet,
+                  size: compact ? 88 : 116,
+                ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: monsters.isEmpty
                       ? Padding(
                           padding: const EdgeInsets.only(bottom: AppSpacing.md),
                           child: Text(
-                            '처방을 등록하면 몬스터가 나타나요.\n'
-                            '영양제 일정을 사진으로 지키면 캐릭터가 자라요.',
+                            '싸우는 중인 몬스터가 없어요. '
+                            '처방을 등록하면 새 몬스터가 나타나요.',
                             style: AppTypography.caption.copyWith(
                               color: AppColors.inkMuted,
                             ),
@@ -250,6 +273,30 @@ class StageCard extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
             GrowthBar(growth: growth),
+            if (onCollection != null || onDraw != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Row(
+                spacing: AppSpacing.xs,
+                children: [
+                  if (onCollection != null)
+                    Expanded(
+                      child: FilledButton.tonal(
+                        style: tonalButtonStyle,
+                        onPressed: onCollection,
+                        child: const Text('컬렉션'),
+                      ),
+                    ),
+                  if (onDraw != null)
+                    Expanded(
+                      child: FilledButton.tonal(
+                        style: tonalButtonStyle,
+                        onPressed: onDraw,
+                        child: Text('뽑기 · $tickets장'),
+                      ),
+                    ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

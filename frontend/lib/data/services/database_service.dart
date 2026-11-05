@@ -18,7 +18,7 @@ class DatabaseService {
     return _factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 5,
+        version: 6,
         onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
         onCreate: _create,
         onUpgrade: _upgrade,
@@ -59,6 +59,7 @@ class DatabaseService {
     _createDrugInfos(batch);
     _createPrescriptions(batch);
     _createMonsters(batch);
+    _createCollection(batch);
     await batch.commit(noResult: true);
   }
 
@@ -78,6 +79,7 @@ class DatabaseService {
       }
       _createMonsters(batch);
     }
+    if (from < 6) _createCollection(batch);
     await batch.commit(noResult: true);
   }
 
@@ -132,6 +134,24 @@ class DatabaseService {
       color TEXT NOT NULL,
       shape TEXT NOT NULL
     )''');
+
+  /// 버전 6. 뽑기로 얻은 스킨·액세서리(한 번 뽑을 때 한 행, 쓴 뽑기권 수)와 캐릭터 장착 (docs/MVP.md 7.2).
+  /// 뽑기 결과는 기록에서 다시 셀 수 없어 저장한다. 얻은 뽑기권과 펫(퇴치한 몬스터)은 기록에서 센다.
+  static void _createCollection(Batch batch) => batch
+    ..execute('''
+      CREATE TABLE collection (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item TEXT NOT NULL,
+        obtained_at INTEGER NOT NULL,
+        source TEXT NOT NULL DEFAULT 'draw'
+      )''')
+    ..execute('''
+      CREATE TABLE character (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        skin TEXT,
+        accessory TEXT,
+        pet_prescription_id INTEGER REFERENCES prescriptions(id) ON DELETE SET NULL
+      )''');
 
   Future<void> close() async {
     final database = _database;

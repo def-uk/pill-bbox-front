@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'data/repositories/backup_repository.dart';
+import 'data/repositories/collection_repository.dart';
 import 'data/repositories/drug_info_repository.dart';
 import 'data/repositories/intake_repository.dart';
 import 'data/repositories/medication_repository.dart';
@@ -99,10 +100,6 @@ class _PillboxAppState extends State<PillboxApp> {
               PrescriptionRepository(widget.database, context.read()),
         ),
         Provider(
-          create: (context) =>
-              BackupRepository(context.read(), context.read(), context.read()),
-        ),
-        Provider(
           create: (_) => DrugInfoRepository(
             widget.database,
             widget.drugInfo ?? DrugInfoService(),
@@ -110,6 +107,19 @@ class _PillboxAppState extends State<PillboxApp> {
         ),
         Provider(
           create: (context) => RewardRepository(
+            context.read(),
+            context.read(),
+            context.read(),
+            context.read(),
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (context) =>
+              CollectionRepository(widget.database, context.read()),
+        ),
+        // 뽑기 기록과 장착도 백업에 넣으므로 컬렉션 다음에 만든다.
+        Provider(
+          create: (context) => BackupRepository(
             context.read(),
             context.read(),
             context.read(),

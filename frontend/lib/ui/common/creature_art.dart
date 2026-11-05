@@ -60,10 +60,20 @@ MonsterBody monsterBodyOf(int prescriptionId, MonsterLook? look) {
 
 /// 내 캐릭터. 단계가 오를수록 크고 갖춰진다.
 class CharacterArt extends StatelessWidget {
-  const CharacterArt({super.key, required this.stage, this.size = 120});
+  const CharacterArt({
+    super.key,
+    required this.stage,
+    this.size = 120,
+    this.skinId,
+    this.accessoryId,
+  });
 
   final CharacterStage stage;
   final double size;
+
+  /// 장착한 스킨·액세서리 id (data/models/cosmetic.dart). 없으면 기본 라임색.
+  final String? skinId;
+  final String? accessoryId;
 
   @override
   Widget build(BuildContext context) {
@@ -72,8 +82,58 @@ class CharacterArt extends StatelessWidget {
       image: true,
       child: CustomPaint(
         size: Size.square(size),
-        painter: _CharacterPainter(stage),
+        painter: _CharacterPainter(stage, _Skin.of(skinId), accessoryId),
       ),
+    );
+  }
+}
+
+/// 장착한 캐릭터와 옆에 데리고 다니는 펫(퇴치한 몬스터).
+class CharacterWithPet extends StatelessWidget {
+  const CharacterWithPet({
+    super.key,
+    required this.stageExp,
+    this.skinId,
+    this.accessoryId,
+    this.pet,
+    this.size = 120,
+  });
+
+  /// 누적 경험치. 단계는 여기서 정한다.
+  final int stageExp;
+  final String? skinId;
+  final String? accessoryId;
+
+  /// (처방 id, 생김새). 펫이 없으면 null.
+  final (int, MonsterLook?)? pet;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final character = CharacterArt(
+      stage: CharacterStage.of(stageExp),
+      size: size,
+      skinId: skinId,
+      accessoryId: accessoryId,
+    );
+    final pet = this.pet;
+    if (pet == null) return character;
+    final (id, look) = pet;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        character,
+        Semantics(
+          label: '펫 · ${monsterName(look)}',
+          child: MonsterArt(
+            body: monsterBodyOf(id, look),
+            color: monsterColor(look?.color),
+            size: size * 0.38,
+            friendly: true,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -86,6 +146,7 @@ class MonsterArt extends StatelessWidget {
     required this.color,
     this.size = 88,
     this.defeated = false,
+    this.friendly = false,
   });
 
   final MonsterBody body;
@@ -93,11 +154,19 @@ class MonsterArt extends StatelessWidget {
   final double size;
   final bool defeated;
 
+  /// 퇴치해 펫이 된 몬스터. 웃는 얼굴.
+  final bool friendly;
+
   @override
   Widget build(BuildContext context) {
     final art = CustomPaint(
       size: Size.square(size),
-      painter: _MonsterPainter(body, color, defeated: defeated),
+      painter: _MonsterPainter(
+        body,
+        color,
+        defeated: defeated,
+        friendly: friendly,
+      ),
     );
     return ExcludeSemantics(
       child: defeated ? Opacity(opacity: 0.45, child: art) : art,
@@ -131,9 +200,11 @@ Paint _stroke(Color color, double width) => Paint()
   ..isAntiAlias = true;
 
 class _CharacterPainter extends CustomPainter {
-  _CharacterPainter(this.stage);
+  _CharacterPainter(this.stage, this.skin, this.accessoryId);
 
   final CharacterStage stage;
+  final _Skin skin;
+  final String? accessoryId;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -145,6 +216,8 @@ class _CharacterPainter extends CustomPainter {
       CharacterStage.complete => 1.0,
     };
     _inBox(canvas, size, scale, () {
+      final anchor = _Anchor.of(stage);
+      if (accessoryId == 'acc_wings') _wings(canvas, anchor);
       switch (stage) {
         case CharacterStage.egg:
           _egg(canvas);
@@ -158,7 +231,145 @@ class _CharacterPainter extends CustomPainter {
           _body(canvas, ears: _Ears.full, belly: true, mark: true);
           _crown(canvas);
       }
+      _accessory(canvas, anchor);
     });
+  }
+
+  /// 액세서리. 날개는 몸 뒤에 먼저 그린다.
+  void _accessory(Canvas canvas, _Anchor at) {
+    switch (accessoryId) {
+      case 'acc_ribbon':
+        const pink = Color(0xFFFF6FA3);
+        final c = Offset(at.cx + 16, at.top + 6);
+        for (final dir in [-1.0, 1.0]) {
+          canvas.drawPath(
+            Path()
+              ..moveTo(c.dx, c.dy)
+              ..lineTo(c.dx + dir * 12, c.dy - 7)
+              ..lineTo(c.dx + dir * 12, c.dy + 7)
+              ..close(),
+            _fill(pink),
+          );
+        }
+        canvas.drawCircle(c, 3.6, _fill(const Color(0xFFE0457F)));
+      case 'acc_glasses':
+        final frame = _stroke(const Color(0xFF3B2F2F), 2.4);
+        for (final dir in [-1.0, 1.0]) {
+          canvas.drawCircle(Offset(at.cx + dir * at.eyeGap, at.eyeY), 8, frame);
+        }
+        canvas.drawLine(
+          Offset(at.cx - at.eyeGap + 8, at.eyeY),
+          Offset(at.cx + at.eyeGap - 8, at.eyeY),
+          frame,
+        );
+      case 'acc_cap':
+        const red = Color(0xFFFF5A5F);
+        canvas.drawPath(
+          Path()
+            ..moveTo(at.cx - 20, at.top + 12)
+            ..cubicTo(
+              at.cx - 20,
+              at.top - 6,
+              at.cx + 20,
+              at.top - 6,
+              at.cx + 20,
+              at.top + 12,
+            )
+            ..close(),
+          _fill(red),
+        );
+        canvas.drawRRect(
+          RRect.fromLTRBR(
+            at.cx + 6,
+            at.top + 9,
+            at.cx + 34,
+            at.top + 15,
+            const Radius.circular(3),
+          ),
+          _fill(const Color(0xFFD9363E)),
+        );
+        canvas.drawCircle(Offset(at.cx, at.top - 1), 2.4, _fill(Colors.white));
+      case 'acc_headphones':
+        const band = Color(0xFF3B3355);
+        canvas.drawArc(
+          Rect.fromCenter(
+            center: Offset(at.cx, at.eyeY),
+            width: at.halfWidth * 2 + 6,
+            height: (at.eyeY - at.top) * 2 + 8,
+          ),
+          pi,
+          pi,
+          false,
+          _stroke(band, 4),
+        );
+        for (final dir in [-1.0, 1.0]) {
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromCenter(
+                center: Offset(at.cx + dir * (at.halfWidth + 3), at.eyeY + 2),
+                width: 9,
+                height: 16,
+              ),
+              const Radius.circular(4),
+            ),
+            _fill(const Color(0xFF8E7BFF)),
+          );
+        }
+      case 'acc_scarf':
+        const orange = Color(0xFFFF922B);
+        final rect = RRect.fromLTRBR(
+          at.cx - at.halfWidth - 2,
+          at.neckY - 5,
+          at.cx + at.halfWidth + 2,
+          at.neckY + 5,
+          const Radius.circular(5),
+        );
+        canvas.drawRRect(rect, _fill(orange));
+        canvas.drawRRect(
+          RRect.fromLTRBR(
+            at.cx + 20,
+            at.neckY,
+            at.cx + 29,
+            at.neckY + 18,
+            const Radius.circular(4),
+          ),
+          _fill(orange),
+        );
+        for (
+          var x = at.cx - at.halfWidth + 6;
+          x < at.cx + at.halfWidth;
+          x += 9
+        ) {
+          canvas.drawLine(
+            Offset(x, at.neckY - 4),
+            Offset(x, at.neckY + 4),
+            _stroke(const Color(0xFFFFD8A8), 2),
+          );
+        }
+    }
+  }
+
+  void _wings(Canvas canvas, _Anchor at) {
+    for (final dir in [-1.0, 1.0]) {
+      final root = Offset(at.cx + dir * (at.halfWidth - 6), at.neckY - 4);
+      final wing = Path()
+        ..moveTo(root.dx, root.dy)
+        ..quadraticBezierTo(
+          root.dx + dir * 26,
+          root.dy - 30,
+          root.dx + dir * 34,
+          root.dy - 12,
+        )
+        ..quadraticBezierTo(
+          root.dx + dir * 30,
+          root.dy + 4,
+          root.dx,
+          root.dy + 10,
+        )
+        ..close();
+      canvas.drawPath(wing, _fill(Colors.white));
+      canvas.drawPath(wing, _stroke(const Color(0xFFD9D2F5), 2));
+    }
   }
 
   void _egg(Canvas canvas) {
@@ -181,12 +392,12 @@ class _CharacterPainter extends CustomPainter {
       ..lineTo(100, 74)
       ..lineTo(0, 74)
       ..close();
-    canvas.drawPath(band, _fill(CreatureColors.lime));
-    canvas.drawCircle(const Offset(36, 30), 6, _fill(CreatureColors.lime));
-    canvas.drawCircle(const Offset(62, 22), 4, _fill(CreatureColors.lime));
-    canvas.drawCircle(const Offset(66, 86), 5, _fill(CreatureColors.lime));
+    canvas.drawPath(band, skin.body());
+    canvas.drawCircle(const Offset(36, 30), 6, skin.body());
+    canvas.drawCircle(const Offset(62, 22), 4, skin.body());
+    canvas.drawCircle(const Offset(66, 86), 5, skin.body());
     canvas.restore();
-    canvas.drawPath(egg, _stroke(CreatureColors.limeShade, 3));
+    canvas.drawPath(egg, _stroke(skin.shade, 3));
     // 금 간 자리.
     canvas.drawPath(
       Path()
@@ -206,13 +417,13 @@ class _CharacterPainter extends CustomPainter {
       ..cubicTo(26, 98, 8, 90, 8, 70)
       ..cubicTo(8, 50, 22, 22, 50, 22)
       ..close();
-    canvas.drawPath(body, _fill(CreatureColors.lime));
+    canvas.drawPath(body, skin.body());
     // 머리 위 새싹 같은 털 한 가닥.
     canvas.drawPath(
       Path()
         ..moveTo(50, 24)
         ..quadraticBezierTo(46, 10, 56, 8),
-      _stroke(CreatureColors.limeShade, 4),
+      _stroke(skin.shade, 4),
     );
     _face(canvas, eyeY: 58, eyeGap: 15, eyeH: 9);
     canvas.drawCircle(const Offset(28, 70), 5, _fill(CreatureColors.blush));
@@ -225,7 +436,7 @@ class _CharacterPainter extends CustomPainter {
     required bool belly,
     bool mark = false,
   }) {
-    final lime = _fill(CreatureColors.lime);
+    final lime = skin.body();
     if (ears == _Ears.full) {
       // 아이콘처럼 왼쪽은 뾰족한 귀, 오른쪽은 접힌 귀.
       canvas.drawPath(
@@ -307,7 +518,7 @@ class _CharacterPainter extends CustomPainter {
     required double eyeGap,
     required double eyeH,
   }) {
-    final feature = _fill(CreatureColors.feature);
+    final feature = _fill(skin.feature);
     for (final x in [50 - eyeGap, 50 + eyeGap]) {
       canvas.drawRRect(
         RRect.fromRectAndRadius(
@@ -322,7 +533,7 @@ class _CharacterPainter extends CustomPainter {
       0.2,
       pi - 0.4,
       false,
-      _stroke(CreatureColors.feature, 2.4),
+      _stroke(skin.feature, 2.4),
     );
   }
 
@@ -358,17 +569,97 @@ class _CharacterPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_CharacterPainter old) => old.stage != stage;
+  bool shouldRepaint(_CharacterPainter old) =>
+      old.stage != stage || old.skin != skin || old.accessoryId != accessoryId;
 }
 
 enum _Ears { nubs, full }
 
+/// 단계마다 액세서리를 붙이는 자리 (100×100 좌표).
+class _Anchor {
+  const _Anchor({
+    required this.top,
+    required this.eyeY,
+    required this.eyeGap,
+    required this.neckY,
+    required this.halfWidth,
+  });
+
+  static _Anchor of(CharacterStage stage) => switch (stage) {
+    CharacterStage.egg => const _Anchor(
+      top: 8,
+      eyeY: 40,
+      eyeGap: 12,
+      neckY: 62,
+      halfWidth: 36,
+    ),
+    CharacterStage.baby => const _Anchor(
+      top: 26,
+      eyeY: 58,
+      eyeGap: 15,
+      neckY: 80,
+      halfWidth: 40,
+    ),
+    _ => const _Anchor(top: 22, eyeY: 46, eyeGap: 12, neckY: 64, halfWidth: 33),
+  };
+
+  final double cx = 50;
+  final double top;
+  final double eyeY;
+  final double eyeGap;
+  final double neckY;
+  final double halfWidth;
+}
+
+/// 스킨: 몸 색(그라데이션이면 두 색), 그늘, 눈·입 색.
+class _Skin {
+  const _Skin(this.colors, this.shade, {this.feature = CreatureColors.feature});
+
+  static _Skin of(String? id) => switch (id) {
+    'skin_mint' => const _Skin([Color(0xFF7FE8C8)], Color(0xFF4FC7A3)),
+    'skin_peach' => const _Skin([Color(0xFFFFB89A)], Color(0xFFF09574)),
+    'skin_sky' => const _Skin([Color(0xFF8FD3FF)], Color(0xFF5FB3EA)),
+    'skin_lavender' => const _Skin([Color(0xFFC9B5FF)], Color(0xFFA58BF0)),
+    'skin_sunset' => const _Skin([
+      Color(0xFFFFC24C),
+      Color(0xFFFF6F91),
+    ], Color(0xFFE85D7C)),
+    'skin_galaxy' => const _Skin(
+      [Color(0xFF5B3FD6), Color(0xFF241A6B)],
+      Color(0xFF8E7BFF),
+      feature: CreatureColors.belly,
+    ),
+    _ => const _Skin([CreatureColors.lime], CreatureColors.limeShade),
+  };
+
+  final List<Color> colors;
+  final Color shade;
+  final Color feature;
+
+  Paint body() {
+    if (colors.length == 1) return _fill(colors.single);
+    return Paint()
+      ..isAntiAlias = true
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: colors,
+      ).createShader(const Rect.fromLTWH(0, 0, 100, 100));
+  }
+}
+
 class _MonsterPainter extends CustomPainter {
-  _MonsterPainter(this.body, this.color, {required this.defeated});
+  _MonsterPainter(
+    this.body,
+    this.color, {
+    required this.defeated,
+    required this.friendly,
+  });
 
   final MonsterBody body;
   final Color color;
   final bool defeated;
+  final bool friendly;
 
   Color get _shade => Color.lerp(color, const Color(0xFF1B1830), 0.28)!;
 
@@ -485,6 +776,26 @@ class _MonsterPainter extends CustomPainter {
   void _face(Canvas canvas, {required double y}) {
     final feature = _fill(CreatureColors.feature);
     final line = _stroke(CreatureColors.feature, 3);
+    if (friendly) {
+      for (final dir in [-1.0, 1.0]) {
+        final x = 50 + dir * 13;
+        canvas.drawArc(
+          Rect.fromCenter(center: Offset(x, y + 2), width: 10, height: 9),
+          pi,
+          pi,
+          false,
+          line,
+        );
+      }
+      canvas.drawArc(
+        Rect.fromCenter(center: Offset(50, y + 9), width: 12, height: 9),
+        0.2,
+        pi - 0.4,
+        false,
+        _stroke(CreatureColors.feature, 2.6),
+      );
+      return;
+    }
     for (final dir in [-1.0, 1.0]) {
       final x = 50 + dir * 13;
       if (defeated) {
@@ -530,5 +841,8 @@ class _MonsterPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_MonsterPainter old) =>
-      old.body != body || old.color != color || old.defeated != defeated;
+      old.body != body ||
+      old.color != color ||
+      old.defeated != defeated ||
+      old.friendly != friendly;
 }

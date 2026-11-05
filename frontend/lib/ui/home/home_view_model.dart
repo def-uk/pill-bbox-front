@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../data/models/medication.dart';
 import '../../data/repositories/backup_repository.dart';
+import '../../data/repositories/collection_repository.dart';
 import '../../data/repositories/intake_repository.dart';
 import '../../data/repositories/medication_repository.dart';
 import '../../data/repositories/prescription_repository.dart';
@@ -23,6 +24,7 @@ class HomeViewModel extends ChangeNotifier {
     required this._medications,
     required this._prescriptions,
     required this._rewards,
+    required this._collection,
     required this._picker,
     required this._backup,
     required this._backupFiles,
@@ -31,12 +33,14 @@ class HomeViewModel extends ChangeNotifier {
     _intakes.addListener(load);
     _medications.addListener(load);
     _prescriptions.addListener(load);
+    _collection.addListener(load);
   }
 
   final IntakeRepository _intakes;
   final MedicationRepository _medications;
   final PrescriptionRepository _prescriptions;
   final RewardRepository _rewards;
+  final CollectionRepository _collection;
   final PhotoPickerService _picker;
   final BackupRepository _backup;
   final BackupFileService _backupFiles;
@@ -59,6 +63,14 @@ class HomeViewModel extends ChangeNotifier {
   Map<int, MonsterLook?> monsterLooks = const {};
 
   Growth get growth => Growth(rewards.totalExp);
+
+  Equipment equipment = Equipment.none;
+
+  /// 쓸 수 있는 뽑기권.
+  int tickets = 0;
+
+  /// 데리고 다니는 펫: (처방 id, 생김새). 없거나 더는 퇴치한 몬스터가 아니면 null.
+  (int, MonsterLook?)? pet;
 
   /// 싸우는 중인 몬스터. 먼저 등록한 처방부터.
   List<MonsterState> get activeMonsters => [
@@ -103,15 +115,29 @@ class HomeViewModel extends ChangeNotifier {
     final records = await _intakes.recordsOn(now);
     final prescriptions = await _prescriptions.scheduledOn(now);
     final rewards = await _rewards.current();
+    final equipment = await _collection.equipment();
+    final petMonster = rewards.monsters
+        .where(
+          (m) =>
+              m.isDefeated && m.prescription.id == equipment.petPrescriptionId,
+        )
+        .firstOrNull;
     final looks = await _rewards.monsterLooks([
       for (final m in rewards.monsters)
         if (m.isActive) m.prescription,
+      ?petMonster?.prescription,
     ]);
+    final spent = await _collection.spentTickets();
     if (_disposed) return;
     today = now;
     this.medications = medications;
     this.rewards = rewards;
     monsterLooks = looks;
+    this.equipment = equipment;
+    pet = petMonster == null
+        ? null
+        : (petMonster.prescription.id, looks[petMonster.prescription.id]);
+    tickets = max(0, rewards.earnedTickets - spent);
     summary = summarizeDay(medications, records, prescriptions: prescriptions);
     loading = false;
     notifyListeners();
@@ -181,6 +207,7 @@ class HomeViewModel extends ChangeNotifier {
     _intakes.removeListener(load);
     _medications.removeListener(load);
     _prescriptions.removeListener(load);
+    _collection.removeListener(load);
     super.dispose();
   }
 }
