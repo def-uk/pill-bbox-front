@@ -1,7 +1,6 @@
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 
 import '../../data/models/medication.dart';
 import '../../data/repositories/backup_repository.dart';
@@ -11,7 +10,6 @@ import '../../data/repositories/medication_repository.dart';
 import '../../data/repositories/prescription_repository.dart';
 import '../../data/repositories/reward_repository.dart';
 import '../../data/services/backup_file_service.dart';
-import '../../data/services/photo_picker_service.dart';
 import '../../utils/character.dart';
 import '../../utils/intake_matcher.dart';
 import '../../utils/monster_look.dart';
@@ -25,7 +23,6 @@ class HomeViewModel extends ChangeNotifier {
     required this._prescriptions,
     required this._rewards,
     required this._collection,
-    required this._picker,
     required this._backup,
     required this._backupFiles,
     DateTime Function()? now,
@@ -41,19 +38,13 @@ class HomeViewModel extends ChangeNotifier {
   final PrescriptionRepository _prescriptions;
   final RewardRepository _rewards;
   final CollectionRepository _collection;
-  final PhotoPickerService _picker;
   final BackupRepository _backup;
   final BackupFileService _backupFiles;
   final DateTime Function() _now;
   bool _disposed = false;
 
-  /// 알약 사진이 없을 때 해 보는 샘플 사진을 두는 곳.
-  static const sampleDirectory = 'assets/images/test_images/';
-
   bool loading = true;
 
-  /// 카메라나 사진 선택 창이 열려 있는 동안 true.
-  bool picking = false;
   DateTime today = DateTime.now();
   List<Medication> medications = const [];
   DaySummary summary = const DaySummary(slots: [], unscheduled: []);
@@ -162,17 +153,6 @@ class HomeViewModel extends ChangeNotifier {
     count: slot.remaining,
   );
 
-  /// 사진을 찍거나 골라 돌려준다. 그냥 닫았거나 이미 여는 중이면 null.
-  Future<Uint8List?> pickPhoto(PhotoSource source) async {
-    if (picking) return null;
-    _setPicking(true);
-    try {
-      return await _picker.pick(source);
-    } finally {
-      _setPicking(false);
-    }
-  }
-
   /// 약·기록을 엑셀로 내보낸다. 저장했으면 true.
   Future<bool> exportExcel() async => _backupFiles.save(
     '알약몬-${dateKey(_now())}.xlsx',
@@ -183,27 +163,6 @@ class HomeViewModel extends ChangeNotifier {
   Future<ImportSummary?> importExcel() async {
     final bytes = await _backupFiles.pick();
     return bytes == null ? null : _backup.importExcel(bytes);
-  }
-
-  final _random = Random();
-  String? _lastSample;
-
-  /// 샘플 사진 중 하나를 고른다. 연달아 같은 사진은 고르지 않는다. 샘플이 없으면 null.
-  Future<Uint8List?> loadSamplePhoto() async {
-    final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
-    final samples = [
-      for (final a in manifest.listAssets())
-        if (a.startsWith(sampleDirectory) && a != _lastSample) a,
-    ];
-    if (samples.isEmpty) return null;
-    final asset = _lastSample = samples[_random.nextInt(samples.length)];
-    return (await rootBundle.load(asset)).buffer.asUint8List();
-  }
-
-  void _setPicking(bool value) {
-    if (_disposed) return;
-    picking = value;
-    notifyListeners();
   }
 
   @override

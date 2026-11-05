@@ -29,6 +29,8 @@ void main() {
     await pumpUntilFound(tester, find.text('복용 시간 정하기'));
 
     // 약 등록: 샘플약 A, 1회 2정, 08:00
+    await tester.ensureVisible(find.text('복용 시간 정하기'));
+    await tester.pump();
     await tester.tap(find.text('복용 시간 정하기'));
     await pumpUntilFound(tester, find.text('등록한 약이 없습니다'));
     await tester.tap(find.text('약 등록'));
@@ -53,9 +55,9 @@ void main() {
     await pumpUntilFound(tester, find.text('08:00'));
     await tester.tap(find.text('저장'));
 
-    // 약 관리 → 홈
+    // 약 관리 → 홈 탭
     await pumpUntilFound(tester, find.text('영양제 · 1회 2정 · 08:00'));
-    await tester.tap(find.byType(BackButton));
+    await tester.tap(find.text('홈'));
 
     // 홈: 08:00에 A 2정 예정
     await pumpUntilFound(tester, find.text('예정'));
