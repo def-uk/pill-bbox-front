@@ -14,6 +14,9 @@ const defeatExp = 3;
 /// 영양제 일정을 모두 지킨 날 받는 경험치. 영양제를 몇 개 먹든 하루 1.
 const supplementDayExp = 1;
 
+/// 일정을 이만큼 연속으로 지키면 뽑기권 1장 (docs/MVP.md 7.1).
+const ticketStreakDays = 7;
+
 /// 처방 하나의 몬스터.
 class MonsterState {
   const MonsterState({
@@ -54,9 +57,13 @@ class DayReward {
     required this.supplementsDone,
     required this.attacked,
     required this.exp,
+    this.scheduleDone = false,
   });
 
   final DateTime day;
+
+  /// 그날 일정(영양제 회차와 싸우는 중인 처방 회차)을 모두 사진으로 지켰다. 뽑기권 연속 기록에 쓴다.
+  final bool scheduleDone;
 
   /// 영양제 일정이 있고, 모두 사진으로 지켰다.
   final bool supplementsDone;
@@ -85,6 +92,47 @@ class RewardState {
 
   MonsterState? monsterOf(int prescriptionId) =>
       monsters.where((m) => m.prescription.id == prescriptionId).firstOrNull;
+
+  /// 일정을 [ticketStreakDays]일 연속으로 지킬 때마다 1장. 하루라도 빠지면 다시 센다.
+  int get streakTickets {
+    var tickets = 0, streak = 0;
+    DateTime? last;
+    for (final key in days.keys.toList()..sort()) {
+      final d = days[key]!;
+      if (!d.scheduleDone) {
+        streak = 0;
+        last = null;
+        continue;
+      }
+      final consecutive =
+          last != null &&
+          dateKey(DateTime(last.year, last.month, last.day + 1)) == key;
+      streak = consecutive ? streak + 1 : 1;
+      last = d.day;
+      if (streak % ticketStreakDays == 0) tickets++;
+    }
+    return tickets;
+  }
+
+  /// 퇴치한 몬스터마다 1장.
+  int get defeatTickets => monsters.where((m) => m.isDefeated).length;
+
+  /// 지금까지 얻은 뽑기권. 쓴 것은 뺀다 ([CollectionRepository]).
+  int get earnedTickets => streakTickets + defeatTickets;
+
+  /// [today]까지 일정을 연속으로 지킨 날 수. 오늘을 아직 못 지켰으면 어제까지 센다.
+  int streakOn(DateTime today) {
+    var day = DateTime(today.year, today.month, today.day);
+    if (days[dateKey(day)]?.scheduleDone != true) {
+      day = DateTime(day.year, day.month, day.day - 1);
+    }
+    var streak = 0;
+    while (days[dateKey(day)]?.scheduleDone == true) {
+      streak++;
+      day = DateTime(day.year, day.month, day.day - 1);
+    }
+    return streak;
+  }
 }
 
 /// 복용 기록으로 몬스터 체력과 경험치를 처음부터 다시 센다 (docs/MVP.md 5.4).
@@ -157,6 +205,12 @@ RewardState calculateRewards({
       if (complete && p.items.isNotEmpty) attacked.add(p.id);
     }
 
+    final scheduled = supplementSlots.isNotEmpty || fighting.isNotEmpty;
+    final scheduleDone =
+        scheduled &&
+        (supplementSlots.isEmpty || supplementsDone) &&
+        fighting.every((p) => attacked.contains(p.id));
+
     var exp = supplementsDone ? supplementDayExp : 0;
     for (final id in attacked) {
       attacks[id]!.add(day);
@@ -172,6 +226,7 @@ RewardState calculateRewards({
         supplementsDone: supplementsDone,
         attacked: attacked,
         exp: exp,
+        scheduleDone: scheduleDone,
       );
     }
   }
@@ -190,6 +245,7 @@ RewardState calculateRewards({
       supplementsDone: current?.supplementsDone ?? false,
       attacked: current?.attacked ?? const {},
       exp: (current?.exp ?? 0) + dealt,
+      scheduleDone: current?.scheduleDone ?? false,
     );
   }
 

@@ -307,4 +307,57 @@ void main() {
     expect(defeat.monsters.single.after.isDefeated, isTrue);
     expect(defeat.expGained, defeatExp);
   });
+
+  group('뽑기권', () {
+    final vitamin = med(2, MedicationKind.supplement, times: [9 * 60]);
+    List<IntakeRecord> keep(Iterable<int> days, {bool vitaminToo = true}) => [
+      for (final d in days) ...[
+        rec(1, d, 8),
+        rec(1, d, 20),
+        if (vitaminToo) rec(2, d, 9),
+      ],
+    ];
+    RewardState on(List<IntakeRecord> records) =>
+        calc(records, medications: [x, vitamin]);
+
+    test('일정을 7일 연속으로 지키면 1장, 14일이면 2장', () {
+      expect(on(keep(List.generate(6, (i) => i + 1))).streakTickets, 0);
+      expect(on(keep(List.generate(7, (i) => i + 1))).streakTickets, 1);
+      expect(on(keep(List.generate(14, (i) => i + 1))).streakTickets, 2);
+    });
+
+    test('하루라도 빠지거나 일정을 다 지키지 않은 날이 있으면 다시 센다', () {
+      final gap = on(keep([1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13]));
+      expect(gap.streakTickets, 0);
+      expect(gap.streakOn(DateTime(2026, 11, 13)), 6);
+
+      // 7일째에 영양제를 빠뜨렸다: 몬스터는 깎였지만 일정을 다 지키지는 않았다.
+      final partial = on([
+        ...keep([1, 2, 3, 4, 5, 6]),
+        ...keep([7], vitaminToo: false),
+      ]);
+      expect(partial.on(DateTime(2026, 11, 7))!.attacked, {10});
+      expect(partial.on(DateTime(2026, 11, 7))!.scheduleDone, isFalse);
+      expect(partial.streakTickets, 0);
+    });
+
+    test('오늘을 아직 못 지켰으면 어제까지의 연속 기록을 보여 준다', () {
+      final state = on(keep([1, 2, 3]));
+      expect(state.streakOn(DateTime(2026, 11, 3)), 3);
+      expect(state.streakOn(DateTime(2026, 11, 4)), 3);
+      expect(state.streakOn(DateTime(2026, 11, 5)), 0);
+    });
+
+    test('몬스터를 퇴치하면 1장', () {
+      final short = rx(10, [
+        item(1, [8, 20]),
+      ], days: 2);
+      final state = calc(
+        keep([1, 2], vitaminToo: false),
+        prescriptions: [short],
+      );
+      expect(state.defeatTickets, 1);
+      expect(state.earnedTickets, 1);
+    });
+  });
 }

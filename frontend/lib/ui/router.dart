@@ -7,6 +7,10 @@ import 'package:provider/provider.dart';
 import '../utils/monster_look.dart';
 import '../utils/reward_calculator.dart';
 import '../utils/time_format.dart';
+import 'collection/collection_screen.dart';
+import 'collection/collection_view_model.dart';
+import 'collection/draw_screen.dart';
+import 'collection/draw_view_model.dart';
 import 'history/history_day_screen.dart';
 import 'history/history_day_view_model.dart';
 import 'history/history_screen.dart';
@@ -37,6 +41,7 @@ GoRouter buildRouter() => GoRouter(
           medications: context.read(),
           prescriptions: context.read(),
           rewards: context.read(),
+          collection: context.read(),
           picker: context.read(),
           backup: context.read(),
           backupFiles: context.read(),
@@ -59,6 +64,25 @@ GoRouter buildRouter() => GoRouter(
           rewards: context.read(),
         )..detect(),
         child: const ResultScreen(),
+      ),
+    ),
+    GoRoute(
+      path: '/collection',
+      builder: (context, state) => ChangeNotifierProvider(
+        create: (context) => CollectionViewModel(
+          collection: context.read(),
+          rewards: context.read(),
+        )..load(),
+        child: const CollectionScreen(),
+      ),
+    ),
+    GoRoute(
+      path: '/draw',
+      builder: (context, state) => ChangeNotifierProvider(
+        create: (context) =>
+            DrawViewModel(collection: context.read(), rewards: context.read())
+              ..load(),
+        child: const DrawScreen(),
       ),
     ),
     GoRoute(

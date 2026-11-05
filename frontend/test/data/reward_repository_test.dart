@@ -5,6 +5,7 @@ import 'package:pillbbox/data/models/appearance.dart';
 import 'package:pillbbox/data/models/medication.dart';
 import 'package:pillbbox/data/models/prescription.dart';
 import 'package:pillbbox/data/repositories/backup_repository.dart';
+import 'package:pillbbox/data/repositories/collection_repository.dart';
 import 'package:pillbbox/data/repositories/drug_info_repository.dart';
 import 'package:pillbbox/data/repositories/intake_repository.dart';
 import 'package:pillbbox/data/repositories/medication_repository.dart';
@@ -37,7 +38,12 @@ void main() {
       prescriptions,
       DrugInfoRepository(db, DrugInfoService(baseUrl: '')),
     );
-    backup = BackupRepository(medications, intakes, prescriptions);
+    backup = BackupRepository(
+      medications,
+      intakes,
+      prescriptions,
+      CollectionRepository(db, rewards),
+    );
   }
 
   setUp(open);

@@ -2,14 +2,19 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pillbbox/data/models/appearance.dart';
+import 'package:pillbbox/data/models/cosmetic.dart';
 import 'package:pillbbox/data/models/intake_record.dart';
 import 'package:pillbbox/data/models/medication.dart';
 import 'package:pillbbox/data/models/prescription.dart';
 import 'package:pillbbox/data/repositories/backup_repository.dart';
+import 'package:pillbbox/data/repositories/collection_repository.dart';
+import 'package:pillbbox/data/repositories/drug_info_repository.dart';
 import 'package:pillbbox/data/repositories/intake_repository.dart';
 import 'package:pillbbox/data/repositories/medication_repository.dart';
 import 'package:pillbbox/data/repositories/prescription_repository.dart';
+import 'package:pillbbox/data/repositories/reward_repository.dart';
 import 'package:pillbbox/data/services/database_service.dart';
+import 'package:pillbbox/data/services/drug_info_service.dart';
 import 'package:pillbbox/utils/xlsx.dart';
 
 import '../helpers.dart';
@@ -19,6 +24,7 @@ void main() {
   late MedicationRepository medications;
   late IntakeRepository intakes;
   late PrescriptionRepository prescriptions;
+  late CollectionRepository collection;
   late BackupRepository backup;
   var now = DateTime(2026, 10, 30, 8, 10, 23, 456);
 
@@ -28,7 +34,14 @@ void main() {
     medications = MedicationRepository(db, photos);
     intakes = IntakeRepository(db, photos, now: () => now);
     prescriptions = PrescriptionRepository(db, medications, now: () => now);
-    backup = BackupRepository(medications, intakes, prescriptions);
+    final rewards = RewardRepository(
+      medications,
+      intakes,
+      prescriptions,
+      DrugInfoRepository(db, DrugInfoService(baseUrl: '')),
+    );
+    collection = CollectionRepository(db, rewards, now: () => now);
+    backup = BackupRepository(medications, intakes, prescriptions, collection);
   }
 
   setUp(open);
@@ -364,5 +377,62 @@ void main() {
         'B': (MedicationKind.asNeeded, null),
       },
     );
+  });
+
+  test('뽑기 기록과 장착(펫 포함)이 그대로 돌아오고, 다시 가져와도 겹치지 않는다', () async {
+    final pill = await medications.save(
+      categoryId: null,
+      name: '항생제',
+      dosePerTake: 1,
+      times: const [],
+    );
+    // 다른 처방을 먼저 등록해 처방 번호와 id가 달라지게 한다.
+    await prescriptions.save(
+      startDate: DateTime(2026, 10, 1),
+      days: 30,
+      items: [
+        PrescriptionItem(
+          medicationId: pill,
+          dosePerTake: 1,
+          times: const [1200],
+        ),
+      ],
+    );
+    final short = await prescriptions.save(
+      startDate: DateTime(2026, 10, 30),
+      days: 1,
+      items: [
+        PrescriptionItem(
+          medicationId: pill,
+          dosePerTake: 1,
+          times: const [480],
+        ),
+      ],
+    );
+    now = DateTime(2026, 10, 30, 8, 5);
+    await intakes.addCameraIntake(
+      photo: Uint8List(1),
+      countsByMedication: {pill: 1},
+    );
+    final drawn = await collection.draw();
+    await collection.equip(drawn);
+    await collection.setPet(short);
+    final bytes = await backup.exportExcel();
+
+    await db.close();
+    open();
+    await backup.importExcel(bytes);
+    expect([for (final (id, _) in await collection.draws()) id], [drawn.id]);
+    final e = await collection.equipment();
+    expect(
+      drawn.slot == CosmeticSlot.skin ? e.skin?.id : e.accessory?.id,
+      drawn.id,
+    );
+    final pet = (await prescriptions.getById(e.petPrescriptionId!))!;
+    expect((pet.startDate, pet.days), (DateTime(2026, 10, 30), 1));
+    expect(await collection.availableTickets(), 0);
+
+    await backup.importExcel(bytes);
+    expect(await collection.draws(), hasLength(1));
   });
 }
