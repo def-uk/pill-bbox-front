@@ -54,7 +54,7 @@
 | 플랫폼 | 구현 | 모델 파일 |
 |---|---|---|
 | Android, iOS | Ultralytics 공식 Flutter 플러그인 [`ultralytics_yolo`](https://pub.dev/packages/ultralytics_yolo) | Android TFLite, iOS Core ML |
-| 웹 | 브라우저의 Web Worker에서 [onnxruntime-web](https://onnxruntime.ai/docs/tutorials/web/)(`web/pill_detector_worker.js`). 웹 서버가 COOP/COEP를 켜 wasm 스레드를 여러 개 쓴다. `ultralytics_yolo`는 웹을 지원하지 않음 | ONNX |
+| 웹 | 브라우저의 Web Worker에서 [onnxruntime-web](https://onnxruntime.ai/docs/tutorials/web/)(`web/pill_detector_worker.js`). 웹 서버가 COOP/COEP를 켜 wasm 스레드를 여러 개 쓴다. 사파리(WebKit)는 스레드를 여러 개 쓰면 추론이 돌아오지 않아 1개로 돌고, 다른 브라우저도 여러 스레드로 20초 안에 끝나지 않으면 1개로 다시 한다. 모델은 앱을 연 뒤 미리 받는다. `ultralytics_yolo`는 웹을 지원하지 않음 | ONNX |
 
 웹도 사진을 서버로 보내지 않고 브라우저 안에서 추론합니다.
 

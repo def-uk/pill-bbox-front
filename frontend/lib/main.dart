@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -35,17 +36,25 @@ Future<void> main() async {
   final labels = model == null
       ? PillLabelService()
       : PillLabelService(asset: model.labelsAsset);
+  final detector = model == null
+      ? FakePillDetector()
+      : createModelDetector(model, labels);
   runApp(
     PillboxApp(
       database: DatabaseService(factory: platformDatabaseFactory),
       photos: createPhotoStorage(),
       picker: PhotoPickerService(),
-      detector: model == null
-          ? FakePillDetector()
-          : createModelDetector(model, labels),
+      detector: detector,
       labels: labels,
     ),
   );
+  // 웹은 모델(약 20MB)을 처음 탐지할 때 받으면 오래 기다린다. 첫 화면이 뜬 뒤 미리 받아 둔다.
+  // 실패하면 탐지할 때 다시 읽는다. 앱(Android·iOS)은 모델이 앱 안에 있어 미리 읽지 않는다.
+  if (kIsWeb && model != null) {
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => detector.load().catchError((_) {}),
+    );
+  }
 }
 
 class PillboxApp extends StatefulWidget {

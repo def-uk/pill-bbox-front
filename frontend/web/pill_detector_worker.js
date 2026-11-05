@@ -9,15 +9,17 @@ importScripts(`${ortDist}ort.min.js`);
 
 // Worker 안에서는 ort가 wasm 위치를 스스로 찾지 못한다(우리 출처에서 찾는다).
 ort.env.wasm.wasmPaths = ortDist;
-// numThreads는 두지 않는다. 교차 출처 격리(COOP/COEP, backend/app/web.py)가 켜져 있으면
-// ort가 코어 수에 맞춰 스레드를 여러 개 쓰고, 꺼져 있으면(flutter run 등) 1개로 돈다.
+// 교차 출처 격리(COOP/COEP, backend/app/web.py)가 켜져 있으면 ort가 코어 수에 맞춰 스레드를 여러 개 쓰고,
+// 꺼져 있으면(flutter run 등) 1개로 돈다. 사파리(WebKit)는 스레드를 여러 개 쓰면 추론이 돌아오지 않아 1개로 둔다.
+// 아이폰의 크롬(CriOS)·파이어폭스(FxiOS)도 WebKit이다.
+const isWebKit = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg|OPR/.test(navigator.userAgent);
 
 // scripts/fetch_model.sh가 imgsz=640으로 내보낸다.
 const inputSize = 640;
 const iouThreshold = 0.45;
 let session;
 
-const handlers = { load, detect, pixels };
+const handlers = { load, warmUp, detect, pixels };
 
 self.onmessage = async ({ data: { id, method, args } }) => {
   try {
@@ -28,8 +30,11 @@ self.onmessage = async ({ data: { id, method, args } }) => {
   }
 };
 
-async function load(modelUrl) {
+/// [singleThread]면 스레드 1개로 돈다. web/pill_detector.js가 여러 스레드로 실패한 뒤 새 Worker에 넘긴다.
+async function load(modelUrl, { singleThread = false } = {}) {
   if (!session) {
+    // 첫 세션을 만들기 전에 정해야 한다.
+    if (singleThread || isWebKit) ort.env.wasm.numThreads = 1;
     session = await ort.InferenceSession.create(modelUrl, {
       executionProviders: ['wasm'],
       // 가중치 int8 모델의 DequantizeLinear를 불러올 때 한 번 풀어 둔다. 그대로 두면 추론마다 다시 푼다.
@@ -38,6 +43,16 @@ async function load(modelUrl) {
     });
   }
   return { result: { threads: ort.env.wasm.numThreads, isolated: self.crossOriginIsolated } };
+}
+
+/// 회색 사진 한 장으로 추론을 한 번 돌린다. 스레드가 제대로 도는지 미리 보고, 첫 실제 추론도 빨라진다.
+async function warmUp() {
+  if (!session) throw new Error('모델을 먼저 읽어야 합니다');
+  const input = new Float32Array(3 * inputSize * inputSize).fill(114 / 255);
+  await session.run({
+    [session.inputNames[0]]: new ort.Tensor('float32', input, [1, 3, inputSize, inputSize]),
+  });
+  return { result: null };
 }
 
 /// 사진을 긴 변 [side]px 이하로 줄인 RGBA 픽셀. lib/utils/object_finder.dart가 쓴다.
