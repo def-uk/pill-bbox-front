@@ -27,17 +27,17 @@ class RewardRepository {
     records: await _intakes.allRecords(),
   );
 
-  /// 처방마다 몬스터 이름. 생김새를 처음 알게 되면 남겨 두고 그 뒤로는 바꾸지 않는다.
+  /// 처방마다 몬스터 생김새. 모르면 null. 처음 알게 되면 남겨 두고 그 뒤로는 바꾸지 않는다.
   ///
-  /// 처방 속 첫 약의 식약처 생김새를 먼저 쓰고, 없으면 사진으로 남긴 색·모양을 쓴다.
-  Future<Map<int, String>> monsterNames(
+  /// 처방 속 약의 식약처 생김새를 먼저 쓰고, 없으면 사진으로 남긴 색·모양을 쓴다.
+  Future<Map<int, MonsterLook?>> monsterLooks(
     List<Prescription> prescriptions,
   ) async {
-    final looks = await _prescriptions.monsterLooks();
+    final stored = await _prescriptions.monsterLooks();
     final appearances = await _medications.appearances();
-    final names = <int, String>{};
+    final looks = <int, MonsterLook?>{};
     for (final p in prescriptions) {
-      var look = switch (looks[p.id]) {
+      var look = switch (stored[p.id]) {
         (final color, final shape) => (color: color, shape: shape),
         null => null,
       };
@@ -56,8 +56,15 @@ class RewardRepository {
           await _prescriptions.setMonsterLook(p.id, look.color, look.shape);
         }
       }
-      names[p.id] = monsterName(look);
+      looks[p.id] = look;
     }
-    return names;
+    return looks;
   }
+
+  /// 처방마다 몬스터 이름 ([monsterLooks]로 짓는다).
+  Future<Map<int, String>> monsterNames(
+    List<Prescription> prescriptions,
+  ) async => (await monsterLooks(
+    prescriptions,
+  )).map((id, look) => MapEntry(id, monsterName(look)));
 }

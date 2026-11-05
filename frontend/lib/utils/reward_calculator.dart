@@ -206,25 +206,40 @@ RewardState calculateRewards({
   );
 }
 
-/// 저장 전후 보상이 달라진 것을 한 줄로. 예: "몬스터 체력 -1 · 경험치 +1". 그대로면 null.
-String? describeRewardChange(RewardState before, RewardState after) {
-  var hit = 0;
-  var defeated = 0;
-  for (final m in after.monsters) {
-    final old = before.monsterOf(m.prescription.id);
-    if (old == null) continue;
-    if (m.hp < old.hp) hit++;
-    if (m.isDefeated && !old.isDefeated) defeated++;
-  }
-  final exp = after.totalExp - before.totalExp;
-  final parts = [
-    if (defeated > 0)
-      defeated == 1 ? '몬스터 퇴치!' : '몬스터 $defeated마리 퇴치!'
-    else if (hit > 0)
-      hit == 1 ? '몬스터 체력 -1' : '몬스터 $hit마리 체력 -1',
-    if (exp > 0) '경험치 +$exp',
+/// 몬스터 하나의 저장 전후.
+typedef MonsterChange = ({MonsterState before, MonsterState after});
+
+/// 저장 전후로 바뀐 보상 (docs/MVP.md 6.4 보상 결과).
+class RewardOutcome {
+  const RewardOutcome({
+    required this.expBefore,
+    required this.expAfter,
+    required this.monsters,
+  });
+
+  final int expBefore;
+  final int expAfter;
+
+  /// 체력이 줄었거나 퇴치한 몬스터.
+  final List<MonsterChange> monsters;
+
+  int get expGained => expAfter - expBefore;
+}
+
+/// 저장 전후 보상을 비교한다. 바뀐 것이 없으면 null.
+RewardOutcome? compareRewards(RewardState before, RewardState after) {
+  final monsters = <MonsterChange>[
+    for (final m in after.monsters)
+      if (before.monsterOf(m.prescription.id) case final old?)
+        if (m.hp < old.hp || (m.isDefeated && !old.isDefeated))
+          (before: old, after: m),
   ];
-  return parts.isEmpty ? null : parts.join(' · ');
+  if (monsters.isEmpty && after.totalExp <= before.totalExp) return null;
+  return RewardOutcome(
+    expBefore: before.totalExp,
+    expAfter: after.totalExp,
+    monsters: monsters,
+  );
 }
 
 typedef _Slot = ({int capacity, int filled});

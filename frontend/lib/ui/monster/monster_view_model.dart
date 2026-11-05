@@ -33,6 +33,9 @@ class MonsterViewModel extends ChangeNotifier {
   MonsterState? monster;
   String name = defaultMonsterName;
 
+  /// 생김새. 모르면 null.
+  MonsterLook? look;
+
   DateTime get today {
     final t = _now();
     return DateTime(t.year, t.month, t.day);
@@ -58,12 +61,13 @@ class MonsterViewModel extends ChangeNotifier {
   Future<void> load() async {
     final state = await _rewards.current();
     final monster = state.monsterOf(prescriptionId);
-    final names = monster == null
-        ? const <int, String>{}
-        : await _rewards.monsterNames([monster.prescription]);
+    final looks = monster == null
+        ? const <int, MonsterLook?>{}
+        : await _rewards.monsterLooks([monster.prescription]);
     if (_disposed) return;
     this.monster = monster;
-    name = names[prescriptionId] ?? defaultMonsterName;
+    look = looks[prescriptionId];
+    name = monsterName(look);
     loading = false;
     notifyListeners();
   }

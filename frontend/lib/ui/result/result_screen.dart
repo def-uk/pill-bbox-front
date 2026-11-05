@@ -22,12 +22,15 @@ class ResultScreen extends StatelessWidget {
     Future<void> save() async {
       final messenger = ScaffoldMessenger.of(context);
       if (await vm.save() && context.mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(['복용 기록을 저장했습니다', ?vm.rewardMessage].join(' · ')),
-          ),
-        );
-        context.pop();
+        // 보상이 바뀌었으면 결과 확인 대신 보상 결과를 보여 준다. 닫으면 홈.
+        if (vm.rewardOutcome case final outcome?) {
+          context.pushReplacement('/reward', extra: (outcome, vm.outcomeLooks));
+        } else {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('복용 기록을 저장했습니다')),
+          );
+          context.pop();
+        }
       } else if (vm.errorMessage != null) {
         messenger.showSnackBar(SnackBar(content: Text(vm.errorMessage!)));
       }

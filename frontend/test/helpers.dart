@@ -72,6 +72,14 @@ Future<void> pumpUntilFound(WidgetTester tester, Finder finder) async {
   throw TestFailure('찾지 못함: $finder, 화면: $texts');
 }
 
+/// 저장 뒤 보상 결과 화면이 나왔으면 닫는다. 보상은 기록 시각에 따라 달라 나오지 않을 수도 있다.
+Future<void> dismissRewardIfShown(WidgetTester tester) async {
+  await tester.pump(const Duration(milliseconds: 500));
+  if (find.text('보상').evaluate().isEmpty) return;
+  await tester.tap(find.text('확인'));
+  await tester.pump(const Duration(milliseconds: 500));
+}
+
 /// 맥미니 백엔드의 `/v1/drugs`를 흉내 낸다. [requests]에 받은 주소를 남긴다.
 DrugInfoService fakeDrugInfo({List<Uri>? requests, int searchStatus = 200}) =>
     DrugInfoService(
