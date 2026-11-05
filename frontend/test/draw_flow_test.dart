@@ -90,7 +90,7 @@ void main() {
     );
     await tester.tap(find.byType(BackButton));
 
-    // 홈 → 컬렉션: 뽑은 아이템과 펫을 장착
+    // 홈 → 컬렉션 탭: 뽑은 아이템과 펫을 장착
     await pumpUntilFound(tester, find.text('뽑기 · 0장'));
     await tester.tap(find.text('컬렉션'));
     await pumpUntilFound(tester, find.text('아이템을 누르면 장착하고, 다시 누르면 빼요'));
@@ -117,7 +117,7 @@ void main() {
     );
     await tester.scrollUntilVisible(find.text('퇴치 기록'), 200, scrollable: list);
     expect(find.textContaining('항생제'), findsNothing);
-    await tester.tap(find.byType(BackButton));
+    await tester.tap(find.text('홈'));
 
     // 홈: 장착한 아이템과 펫
     await pumpUntilFound(

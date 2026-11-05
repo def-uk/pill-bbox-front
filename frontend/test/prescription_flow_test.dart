@@ -26,6 +26,8 @@ void main() {
     );
     await passAgeGate(tester);
     await pumpUntilFound(tester, find.text('복용 시간 정하기'));
+    await tester.ensureVisible(find.text('복용 시간 정하기'));
+    await tester.pump();
     await tester.tap(find.text('복용 시간 정하기'));
     await pumpUntilFound(tester, find.text('처방 등록'));
     await tester.tap(find.text('처방 등록'));
@@ -68,7 +70,7 @@ void main() {
     expect(find.textContaining('부터 28일'), findsOneWidget);
     expect(find.text('처방약 · 1회 2정'), findsOneWidget);
     expect(find.text('처방약 · 1회 1정 · 직접 기록만'), findsOneWidget);
-    await tester.tap(find.byType(BackButton));
+    await tester.tap(find.text('홈'));
 
     // 홈: 08:00에 두 약이 처방의 1회 알 수로
     await pumpUntilFound(tester, find.text('08:00'));

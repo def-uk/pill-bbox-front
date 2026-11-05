@@ -36,7 +36,6 @@ void main() {
       prescriptions: prescriptions,
       rewards: rewards,
       collection: collection,
-      picker: SamplePhotoPickerService(),
       backup: BackupRepository(medications, intakes, prescriptions, collection),
       backupFiles: BackupFileService(),
       now: () => now,

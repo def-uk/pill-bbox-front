@@ -1,14 +1,12 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/intake_record.dart';
 import '../../data/models/medication.dart';
-import '../../data/services/photo_picker_service.dart';
 import '../../utils/intake_matcher.dart';
 import '../../utils/time_format.dart';
+import '../common/creature_art.dart';
 import '../common/kind_picker.dart';
 import '../common/medication_picker.dart';
 import '../common/stage_widgets.dart';
@@ -40,47 +38,6 @@ class HomeScreen extends StatelessWidget {
       if (kind != null) await vm.setKind(medication, kind);
     }
 
-    final header = [
-      StageCard(
-        growth: vm.growth,
-        skinId: vm.equipment.skin?.id,
-        accessoryId: vm.equipment.accessory?.id,
-        pet: vm.pet,
-        tickets: vm.tickets,
-        onCollection: () => context.push('/collection'),
-        onDraw: () => context.push('/draw'),
-        monsters: vm.activeMonsters,
-        looks: vm.monsterLooks,
-        today: vm.today,
-        onTapMonster: (m) => context.push('/monsters/${m.prescription.id}'),
-      ),
-      if (vm.untyped.isNotEmpty)
-        _KindPrompt(medications: vm.untyped, onTap: chooseKind),
-    ];
-
-    void showResult(Uint8List? photo) {
-      if (photo != null && context.mounted) {
-        context.push('/result', extra: photo);
-      }
-    }
-
-    Future<void> pickPhoto(PhotoSource source) async {
-      final messenger = ScaffoldMessenger.of(context);
-      try {
-        showResult(await vm.pickPhoto(source));
-      } catch (_) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              source == PhotoSource.camera
-                  ? '카메라를 열 수 없습니다. 사진 올리기를 써 주세요.'
-                  : '사진을 열 수 없습니다',
-            ),
-          ),
-        );
-      }
-    }
-
     Future<void> exportExcel() async {
       final messenger = ScaffoldMessenger.of(context);
       try {
@@ -94,7 +51,7 @@ class HomeScreen extends StatelessWidget {
       }
     }
 
-    // 파일 창은 메뉴를 누른 그 처리 안에서 연다(웹, 아래 chooseSource와 같은 까닭).
+    // 파일 창은 메뉴를 누른 그 처리 안에서 연다(웹은 누른 순간에 열어야 막히지 않는다).
     Future<void> importExcel() async {
       final messenger = ScaffoldMessenger.of(context);
       String message;
@@ -115,125 +72,33 @@ class HomeScreen extends StatelessWidget {
       messenger.showSnackBar(SnackBar(content: Text(message)));
     }
 
-    // 웹은 사용자가 누른 그 순간에 열어야 브라우저가 카메라·파일 창을 막지 않는다.
-    // 그래서 시트를 닫는 것과 같은 탭 처리 안에서 바로 연다.
-    void chooseSource() => showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheet) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SheetTitle('기록하기'),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.gutter,
-                0,
-                AppSpacing.gutter,
-                AppSpacing.lg,
-              ),
-              child: Row(
-                spacing: AppSpacing.sm,
-                children: [
-                  for (final (source, icon, label) in [
-                    (PhotoSource.camera, Icons.photo_camera_rounded, '사진 찍기'),
-                    (
-                      PhotoSource.gallery,
-                      Icons.photo_library_rounded,
-                      '사진 올리기',
-                    ),
-                  ])
-                    Expanded(
-                      // 시트 안의 큰 선택지라 담는 모양(둥근 사각형)으로 둔다.
-                      child: FilledButton.tonal(
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppSpacing.lg,
-                          ),
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.all(
-                              Radius.circular(AppRadius.lg),
-                            ),
-                          ),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(sheet);
-                          pickPhoto(source);
-                        },
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(icon, size: 32),
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(label),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
+    if (vm.loading) return const Scaffold(body: LoadingState());
+
+    final hud = _Hud(
+      date: formatDate(vm.today),
+      tickets: vm.tickets,
+      onDraw: () => context.push('/draw'),
+      menu: [
+        PopupMenuItem(onTap: exportExcel, child: const Text('엑셀로 내보내기')),
+        PopupMenuItem(onTap: importExcel, child: const Text('엑셀에서 가져오기')),
+        PopupMenuItem(
+          onTap: () => context.push('/metrics'),
+          child: const Text('테스트 지표'),
         ),
-      ),
+        PopupMenuItem(
+          onTap: () => context.push('/about'),
+          child: const Text('앱 안내'),
+        ),
+      ],
     );
 
-    final compact = MediaQuery.sizeOf(context).width < AppLayout.compact;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('오늘 · ${formatDate(vm.today)}'),
-        actionsPadding: EdgeInsets.only(right: gutterOf(context) - 4),
-        actions: [
-          IconButton(
-            tooltip: '기록',
-            onPressed: () => context.push('/history'),
-            icon: const Icon(Icons.calendar_month_rounded),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          IconButton(
-            tooltip: '약 관리',
-            onPressed: () => context.push('/medications'),
-            icon: const Icon(Icons.medication_rounded),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          PopupMenuButton<void>(
-            tooltip: '더 보기',
-            icon: const Icon(Icons.more_horiz_rounded),
-            itemBuilder: (_) => [
-              PopupMenuItem(onTap: exportExcel, child: const Text('엑셀로 내보내기')),
-              PopupMenuItem(onTap: importExcel, child: const Text('엑셀에서 가져오기')),
-              PopupMenuItem(
-                onTap: () => context.push('/metrics'),
-                child: const Text('테스트 지표'),
-              ),
-              PopupMenuItem(
-                onTap: () => context.push('/about'),
-                child: const Text('앱 안내'),
-              ),
-            ],
-          ),
-        ],
-      ),
-      body: switch (vm) {
-        HomeViewModel(loading: true) => const LoadingState(),
-        HomeViewModel(isEmpty: true) => _EmptyGuide(
-          header: header,
-          onTrySample: () async => showResult(await vm.loadSamplePhoto()),
-          onSetSchedule: () => context.push('/medications'),
-        ),
-        _ => ListView(
-          // 아래 떠 있는 기록하기 버튼에 마지막 카드가 가리지 않게 비워 둔다.
-          padding: pagePadding(context, bottom: 120),
-          children: [
-            for (final card in header) ...[
-              card,
-              const SizedBox(height: AppSpacing.xl),
-            ],
+    final List<Widget> today = vm.isEmpty
+        ? [_EmptyGuide(onSetSchedule: () => context.go('/medications'))]
+        : [
+            const SectionLabel('오늘의 퀘스트'),
             for (final (i, (time, slots)) in vm.slotsByTime.indexed) ...[
-              // 시간대 카드 사이는 섹션처럼 32를 비워 덩어리로 읽히게 한다.
-              if (i > 0) const SizedBox(height: AppSpacing.xl),
+              // 시간대 카드 사이는 섹션처럼 비워 덩어리로 읽히게 한다.
+              if (i > 0) const SizedBox(height: AppSpacing.md),
               _DoseCard(
                 time: time,
                 slots: slots,
@@ -244,7 +109,7 @@ class HomeScreen extends StatelessWidget {
             ],
             if (vm.summary.unscheduled.isNotEmpty) ...[
               if (vm.summary.slots.isNotEmpty)
-                const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.md),
               GroupCard(
                 children: [
                   _CardHeader(
@@ -271,45 +136,120 @@ class HomeScreen extends StatelessWidget {
                 ],
               ),
             ],
+          ];
+
+    return Scaffold(
+      // 카드가 몇 장 안 되어 한 번에 그린다.
+      body: SingleChildScrollView(
+        // 아래 바에 떠 있는 기록하기 버튼에 마지막 카드가 가리지 않게 비워 둔다.
+        padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            StageCard(
+              hud: hud,
+              growth: vm.growth,
+              skinId: vm.equipment.skin?.id,
+              accessoryId: vm.equipment.accessory?.id,
+              pet: vm.pet,
+              monsters: vm.activeMonsters,
+              looks: vm.monsterLooks,
+              today: vm.today,
+              onTapMonster: (m) =>
+                  context.push('/monsters/${m.prescription.id}'),
+            ),
+            if (vm.untyped.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.md),
+              ContentWidth(
+                child: _KindPrompt(medications: vm.untyped, onTap: chooseKind),
+              ),
+            ],
+            ContentWidth(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: today,
+              ),
+            ),
           ],
         ),
-      },
-      floatingActionButton: _CaptureButton(
-        compact: compact,
-        onPressed: vm.picking ? null : chooseSource,
       ),
     );
   }
 }
 
-/// "기록하기". 이 앱에서 그림자가 있는 것은 이 버튼 하나다(DESIGN.md 깊이).
-class _CaptureButton extends StatelessWidget {
-  const _CaptureButton({required this.compact, required this.onPressed});
+/// 무대 위쪽 줄: 날짜, 뽑기권, 더 보기 메뉴. 하늘 위에 흰 알약 모양으로 얹는다.
+class _Hud extends StatelessWidget {
+  const _Hud({
+    required this.date,
+    required this.tickets,
+    required this.onDraw,
+    required this.menu,
+  });
 
-  final bool compact;
-  final VoidCallback? onPressed;
+  final String date;
+  final int tickets;
+  final VoidCallback onDraw;
+  final List<PopupMenuEntry<void>> menu;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const ShapeDecoration(
-        shape: StadiumBorder(),
-        shadows: [captureShadow],
-      ),
-      child: compact
-          ? SizedBox.square(
-              dimension: 60,
-              child: FloatingActionButton(
-                tooltip: '기록하기',
-                onPressed: onPressed,
-                child: const Icon(Icons.photo_camera_rounded),
+    const pill = ShapeDecoration(
+      color: AppColors.surface,
+      shape: StadiumBorder(),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Row(
+        children: [
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: DecoratedBox(
+                decoration: pill,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: 10,
+                  ),
+                  child: Text(
+                    date,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodyStrong.copyWith(
+                      fontFeatures: AppTypography.tabular,
+                    ),
+                  ),
+                ),
               ),
-            )
-          : FloatingActionButton.extended(
-              onPressed: onPressed,
-              icon: const Icon(Icons.photo_camera_rounded),
-              label: const Text('기록하기'),
             ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(44, 44),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              backgroundColor: AppColors.surface,
+              foregroundColor: AppColors.ink,
+              textStyle: AppTypography.bodyStrong.copyWith(
+                fontFeatures: AppTypography.tabular,
+              ),
+            ),
+            onPressed: onDraw,
+            icon: const Icon(
+              Icons.confirmation_number_rounded,
+              color: CreatureColors.crown,
+            ),
+            label: Text('뽑기 · $tickets장'),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          PopupMenuButton<void>(
+            tooltip: '더 보기',
+            style: IconButton.styleFrom(backgroundColor: AppColors.surface),
+            icon: const Icon(Icons.more_horiz_rounded),
+            itemBuilder: (_) => menu,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -561,32 +501,32 @@ class _KindPrompt extends StatelessWidget {
 
 /// 오늘 기록도 일정도 없을 때(`empty-guide`). 무엇을 하면 되는지와 잘 찍는 법을 함께 보여 준다.
 class _EmptyGuide extends StatelessWidget {
-  const _EmptyGuide({
-    this.header = const [],
-    required this.onTrySample,
-    required this.onSetSchedule,
-  });
+  const _EmptyGuide({required this.onSetSchedule});
 
-  /// 안내 위에 둘 카드. 종류를 고르지 않은 약, 몬스터와 경험치.
-  final List<Widget> header;
-  final VoidCallback onTrySample;
   final VoidCallback onSetSchedule;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    return ListView(
-      padding: pagePadding(context, top: AppSpacing.lg, bottom: 120),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final card in header) ...[
-          card,
-          const SizedBox(height: AppSpacing.xl),
-        ],
+        const SizedBox(height: AppSpacing.lg),
         Text('오늘 기록이 없습니다', style: textTheme.headlineMedium),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          '알약 사진을 찍거나 올리면 인식한 약이 바로 기록됩니다.',
+          '아래 기록하기를 눌러 알약 사진을 찍거나 올리면 인식한 약이 바로 기록됩니다. '
+          '사진이 없으면 샘플 사진으로 해 볼 수 있어요.',
           style: textTheme.bodyLarge?.copyWith(color: AppColors.inkMuted),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton.tonal(
+            style: tonalButtonStyle,
+            onPressed: onSetSchedule,
+            child: const Text('복용 시간 정하기'),
+          ),
         ),
         const SizedBox(height: AppSpacing.lg),
         DecoratedBox(
@@ -620,22 +560,8 @@ class _EmptyGuide extends StatelessWidget {
                       ],
                     ),
                   ),
-                const SizedBox(height: AppSpacing.md),
-                FilledButton.tonal(
-                  style: tonalButtonStyle,
-                  onPressed: onTrySample,
-                  child: const Text('샘플 사진으로 해 보기'),
-                ),
               ],
             ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton(
-            onPressed: onSetSchedule,
-            child: const Text('복용 시간 정하기'),
           ),
         ),
       ],
