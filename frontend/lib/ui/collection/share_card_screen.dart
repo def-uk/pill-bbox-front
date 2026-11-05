@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/repositories/settings_repository.dart';
 import '../../data/services/image_save_service.dart';
 import '../../utils/time_format.dart';
 import '../common/theme.dart';
@@ -47,6 +48,7 @@ class _ShareCardScreenState extends State<ShareCardScreen> {
   Future<void> _save() async {
     final messenger = ScaffoldMessenger.of(context);
     final saver = context.read<ImageSaveService>();
+    final settings = context.read<SettingsRepository>();
     setState(() => _saving = true);
     String message;
     try {
@@ -55,6 +57,7 @@ class _ShareCardScreenState extends State<ShareCardScreen> {
         '알약몬-캐릭터-${dateKey(now)}.png',
         await _render(),
       );
+      if (saved) await settings.countShareSave();
       message = saved ? '이미지로 저장했어요' : '';
     } catch (_) {
       message = '저장하지 못했어요';

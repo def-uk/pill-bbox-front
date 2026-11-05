@@ -435,4 +435,32 @@ void main() {
     await backup.importExcel(bytes);
     expect(await collection.draws(), hasLength(1));
   });
+
+  test('몬스터 생김새가 백업으로 옮겨져 이름이 같다', () async {
+    final pill = await medications.save(
+      categoryId: null,
+      name: '여드름약',
+      dosePerTake: 1,
+      times: const [],
+    );
+    final id = await prescriptions.save(
+      startDate: DateTime(2026, 11, 5),
+      days: 28,
+      items: [
+        PrescriptionItem(
+          medicationId: pill,
+          dosePerTake: 1,
+          times: const [480],
+        ),
+      ],
+    );
+    await prescriptions.setMonsterLook(id, '주황', '길쭉');
+    final bytes = await backup.exportExcel();
+
+    await db.close();
+    open();
+    await backup.importExcel(bytes);
+    final restored = (await prescriptions.getAll()).single;
+    expect((await prescriptions.monsterLooks())[restored.id], ('주황', '길쭉'));
+  });
 }

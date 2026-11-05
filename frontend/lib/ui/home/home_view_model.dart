@@ -105,6 +105,11 @@ class HomeViewModel extends ChangeNotifier {
   /// 오늘 일정도 기록도 없다.
   bool get isEmpty => summary.slots.isEmpty && summary.unscheduled.isEmpty;
 
+  /// [time] 회차를 놓쳤다: 다 먹지 않았고 회차 시간에서 [rewardWindowMinutes]가 지났다.
+  bool isMissed(int time, List<DoseSlot> slots) =>
+      slots.any((s) => !s.isDone) &&
+      minuteOfDay(_now()) - time > rewardWindowMinutes;
+
   String nameOf(int medicationId) =>
       medications.where((m) => m.id == medicationId).firstOrNull?.name ??
       '알 수 없는 약';

@@ -10,6 +10,7 @@ import 'package:pillbbox/data/repositories/prescription_repository.dart';
 import 'package:pillbbox/data/services/fake_pill_detector.dart';
 import 'package:pillbbox/data/services/pill_label_service.dart';
 import 'package:pillbbox/main.dart';
+import 'package:pillbbox/ui/common/stage_widgets.dart';
 
 import 'helpers.dart';
 
@@ -67,11 +68,20 @@ void main() {
         labels: PillLabelService(),
       ),
     );
+    await passAgeGate(tester);
 
     // 홈: 약 이름 없이 색·모양으로 지은 몬스터와 체력
     await pumpUntilFound(tester, find.text('주황 길쭉 몬스터'));
     expect(find.text('체력 27 / 28'), findsOneWidget);
     expect(find.text('경험치 0'), findsOneWidget);
+    // 무대(몬스터·캐릭터)에는 약 이름이 나오지 않는다. 오늘 일정에는 나온다.
+    expect(
+      find.descendant(
+        of: find.byType(StageCard),
+        matching: find.textContaining('여드름약'),
+      ),
+      findsNothing,
+    );
 
     // 몬스터 상세: 어제 깎았고, 처방 끝내기
     await tester.tap(find.text('주황 길쭉 몬스터'));

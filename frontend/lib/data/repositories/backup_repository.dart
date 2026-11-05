@@ -66,7 +66,9 @@ class BackupRepository {
     '1회 개수',
     '복용 시간',
   ];
-  static const _prescriptionExtraHeader = ['끝낸 날'];
+
+  /// 몬스터 생김새는 처음 정해지면 바꾸지 않으므로, 옮긴 기기에서도 이름이 같도록 넣는다 (DB 버전 7).
+  static const _prescriptionExtraHeader = ['끝낸 날', '몬스터 색', '몬스터 모양'];
   static const _recordHeader = ['시각', '약', '개수', '방법'];
   static const _appearanceHeader = ['약', 'L', 'a', 'b', '길쭉함'];
   static const _sources = {
@@ -77,6 +79,7 @@ class BackupRepository {
   Future<Uint8List> exportExcel() async {
     final medications = await _medications.getAll();
     final prescriptions = await _prescriptions.getAll();
+    final looks = await _prescriptions.monsterLooks();
     final equipment = await _collection.equipment();
     final petNumber = prescriptions.indexWhere(
       (p) => p.id == equipment.petPrescriptionId,
@@ -123,6 +126,8 @@ class BackupRepository {
               item.dosePerTake,
               item.times.map(formatMinuteOfDay).join(', '),
               p.endedOn == null ? null : dateKey(p.endedOn!),
+              looks[p.id]?.$1,
+              looks[p.id]?.$2,
             ],
       ],
       drawSheet: [
@@ -252,6 +257,14 @@ class BackupRepository {
       byName,
       onSkip: () => skipped++,
     );
+    for (final row in prescriptionRows) {
+      final id = prescriptionIds[_int(row, 0)];
+      final color = _string(row, 8), shape = _string(row, 9);
+      if (id != null && color != null && shape != null) {
+        // 이미 생김새가 정해진 처방은 그대로 둔다.
+        await _prescriptions.setMonsterLook(id, color, shape);
+      }
+    }
 
     if (sheets.containsKey(drawSheet)) {
       final draws = <(String, DateTime)>[];

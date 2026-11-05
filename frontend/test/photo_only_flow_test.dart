@@ -27,6 +27,7 @@ void main() {
         labels: PillLabelService(),
       ),
     );
+    await passAgeGate(tester);
     await pumpUntilFound(tester, find.textContaining('오늘 기록이 없습니다'));
 
     await tester.tap(find.text('기록하기'));

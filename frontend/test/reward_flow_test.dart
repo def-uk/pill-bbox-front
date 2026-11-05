@@ -71,6 +71,7 @@ void main() {
         labels: PillLabelService(),
       ),
     );
+    await passAgeGate(tester);
 
     // 홈 무대: 알 단계 캐릭터와 몬스터 둘
     await pumpUntilFound(tester, find.text('체력 7 / 7'));

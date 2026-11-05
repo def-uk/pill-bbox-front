@@ -25,6 +25,7 @@ void main() {
         labels: PillLabelService(),
       ),
     );
+    await passAgeGate(tester);
     await pumpUntilFound(tester, find.text('복용 시간 정하기'));
 
     // 약 등록: 샘플약 A, 1회 2정, 08:00

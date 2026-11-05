@@ -127,6 +127,7 @@ class ResultScreen extends StatelessWidget {
                           ),
                       ],
                     ),
+                    const _SupplementHint(),
                   ],
                   if (vm.lines.isNotEmpty) ...[
                     const SectionLabel('인식된 약'),
@@ -462,6 +463,28 @@ class _LineStatus extends StatelessWidget {
 }
 
 /// 모델이 알약을 하나도 찾지 못했거나, 모델을 쓰지 못했을 때.
+/// 모델의 한계를 알린다 (docs/MVP.md 9.1): 의약품 96종만 알아보고 영양제는 모른다.
+class _SupplementHint extends StatelessWidget {
+  const _SupplementHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xxs,
+        AppSpacing.xs,
+        AppSpacing.xxs,
+        0,
+      ),
+      child: Text(
+        '사진으로 알아보는 약은 의약품 96종뿐이라 영양제는 알아보지 못해요. '
+        '한 번 골라 주면 다음 사진부터 색·모양으로 추천해요.',
+        style: AppTypography.caption.copyWith(color: AppColors.inkMuted),
+      ),
+    );
+  }
+}
+
 class _NoPills extends StatelessWidget {
   const _NoPills({required this.hasUnknowns, required this.modelFailed});
 
@@ -502,6 +525,16 @@ class _NoPills extends StatelessWidget {
                   color: AppColors.inkMuted,
                 ),
               ),
+              if (!hasUnknowns) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '영양제는 사진으로 알아보지 못해요. 약 추가로 골라 주세요.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.inkMuted,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
