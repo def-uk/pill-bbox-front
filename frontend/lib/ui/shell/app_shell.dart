@@ -207,84 +207,140 @@ void showCaptureSheet(BuildContext context) {
     // 탭 화면에서 열어도 아래 바와 기록하기 버튼 위에 뜨게 한다.
     useRootNavigator: true,
     showDragHandle: true,
+    // 찍는 법까지 담아 작은 화면에서는 기본 높이(화면의 9/16)를 넘는다.
+    isScrollControlled: true,
     builder: (sheet) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SheetTitle('기록하기'),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.gutter,
-              0,
-              AppSpacing.gutter,
-              AppSpacing.lg,
-            ),
-            child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                spacing: AppSpacing.xs,
-                children: [
-                  for (final (icon, label, onTap) in [
-                    (
-                      Icons.photo_camera_rounded,
-                      '사진 찍기',
-                      () => pick(PhotoSource.camera),
-                    ),
-                    (
-                      Icons.photo_library_rounded,
-                      '사진 올리기',
-                      () => pick(PhotoSource.gallery),
-                    ),
-                    (Icons.science_rounded, '샘플 사진', trySample),
-                  ])
-                    Expanded(
-                      // 시트 안의 큰 선택지라 담는 모양(둥근 사각형)으로 둔다.
-                      child: FilledButton.tonal(
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.xxs,
-                            vertical: AppSpacing.lg,
-                          ),
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.all(
-                              Radius.circular(AppRadius.lg),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SheetTitle('기록하기'),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.gutter,
+                0,
+                AppSpacing.gutter,
+                AppSpacing.lg,
+              ),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  spacing: AppSpacing.xs,
+                  children: [
+                    for (final (icon, label, onTap) in [
+                      (
+                        Icons.photo_camera_rounded,
+                        '사진 찍기',
+                        () => pick(PhotoSource.camera),
+                      ),
+                      (
+                        Icons.photo_library_rounded,
+                        '사진 올리기',
+                        () => pick(PhotoSource.gallery),
+                      ),
+                      (Icons.science_rounded, '샘플 사진', trySample),
+                    ])
+                      Expanded(
+                        // 시트 안의 큰 선택지라 담는 모양(둥근 사각형)으로 둔다.
+                        child: FilledButton.tonal(
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.xxs,
+                              vertical: AppSpacing.lg,
+                            ),
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(AppRadius.lg),
+                              ),
                             ),
                           ),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(sheet);
-                          onTap();
-                        },
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(icon, size: 32),
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(label, textAlign: TextAlign.center),
-                          ],
+                          onPressed: () {
+                            Navigator.pop(sheet);
+                            onTap();
+                          },
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(icon, size: 32),
+                              const SizedBox(height: AppSpacing.xs),
+                              Text(label, textAlign: TextAlign.center),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.gutter,
-              0,
-              AppSpacing.gutter,
-              AppSpacing.md,
+            const Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.gutter,
+                0,
+                AppSpacing.gutter,
+                AppSpacing.md,
+              ),
+              child: _PhotoTips(),
             ),
-            child: Text(
-              '알약 사진이 없으면 샘플 사진으로 기록을 해 볼 수 있어요.',
-              textAlign: TextAlign.center,
-              style: AppTypography.caption.copyWith(color: AppColors.inkMuted),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.gutter,
+                0,
+                AppSpacing.gutter,
+                AppSpacing.md,
+              ),
+              child: Text(
+                '알약 사진이 없으면 샘플 사진으로 기록을 해 볼 수 있어요.',
+                textAlign: TextAlign.center,
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.inkMuted,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     ),
   );
+}
+
+/// 잘 찍는 법. 휴대폰 사진이 학습 사진과 달라 생기는 오인식을 줄인다 (DESIGN.md 3장).
+class _PhotoTips extends StatelessWidget {
+  const _PhotoTips();
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceSunken,
+        borderRadius: BorderRadius.all(Radius.circular(AppRadius.lg)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('이렇게 찍어 주세요', style: textTheme.titleMedium),
+            const SizedBox(height: AppSpacing.xs),
+            for (final (icon, text) in const [
+              (Icons.crop_square_rounded, '단색 배경 위에 놓기'),
+              (Icons.photo_camera_rounded, '바로 위에서 수직으로 찍기'),
+              (Icons.scatter_plot_rounded, '알약끼리 떨어지게 놓기'),
+            ])
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
+                child: Row(
+                  children: [
+                    Icon(icon, size: 22, color: AppColors.primary),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(child: Text(text, style: textTheme.bodyMedium)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }

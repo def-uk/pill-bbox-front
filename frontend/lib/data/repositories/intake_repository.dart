@@ -88,6 +88,17 @@ class IntakeRepository extends ChangeNotifier {
     return rows.map(IntakeRecord.fromMap).toList();
   }
 
+  /// 가장 최근 기록 [limit]개. 최근 것부터.
+  Future<List<IntakeRecord>> recentRecords({required int limit}) async {
+    final db = await _db.database;
+    final rows = await db.query(
+      'intake_records',
+      orderBy: 'taken_at DESC, id DESC',
+      limit: limit,
+    );
+    return rows.map(IntakeRecord.fromMap).toList();
+  }
+
   /// 백업에서 가져온 기록을 사진 없이 넣는다. 같은 약·같은 시각(초까지)·같은 개수의 기록이 이미 있으면
   /// 건너뛰어, 같은 파일을 두 번 가져와도 겹치지 않는다. 넣은 기록 수를 돌려준다.
   Future<int> importRecords(

@@ -17,6 +17,10 @@ const _weekdays = ['월', '화', '수', '목', '금', '토', '일'];
 String formatDate(DateTime d) =>
     '${d.month}월 ${d.day}일 (${_weekdays[d.weekday - 1]})';
 
+/// 예: 11월 4일 08:12
+String formatMonthDayTime(DateTime t) =>
+    '${t.month}월 ${t.day}일 ${formatTime(t)}';
+
 /// 화면 주소에 쓰는 날짜. 예: 2026-10-30
 String dateKey(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';

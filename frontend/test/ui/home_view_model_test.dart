@@ -101,4 +101,45 @@ void main() {
     now = DateTime(2026, 11, 5, 15, 31);
     expect(vm.reminder, isNull);
   });
+
+  test('오늘 기록이 없어도 어제 기록은 최근 기록으로 읽는다', () async {
+    final db = createTestDatabase();
+    addTearDown(db.close);
+    final photos = FakePhotoStorageService();
+    final medications = MedicationRepository(db, photos);
+    final yesterday = DateTime(2026, 11, 4, 8, 12);
+    final intakes = IntakeRepository(db, photos, now: () => yesterday);
+    final prescriptions = PrescriptionRepository(db, medications);
+    final rewards = RewardRepository(
+      medications,
+      intakes,
+      prescriptions,
+      DrugInfoRepository(db, DrugInfoService(baseUrl: '')),
+    );
+    final collection = CollectionRepository(db, rewards);
+    final vm = HomeViewModel(
+      intakes: intakes,
+      medications: medications,
+      prescriptions: prescriptions,
+      rewards: rewards,
+      collection: collection,
+      backup: BackupRepository(medications, intakes, prescriptions, collection),
+      backupFiles: BackupFileService(),
+      now: () => DateTime(2026, 11, 5, 9),
+    );
+    addTearDown(vm.dispose);
+    final id = await medications.save(
+      categoryId: null,
+      name: 'A',
+      dosePerTake: 1,
+      times: const [],
+    );
+    await intakes.addManualIntake(medicationId: id, count: 2);
+    await vm.load();
+
+    expect(vm.isEmpty, isTrue);
+    expect(vm.recent, hasLength(1));
+    expect(vm.recent.single.takenAt, yesterday);
+    expect(vm.nameOf(vm.recent.single.medicationId), 'A');
+  });
 }
