@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/models/medication.dart';
 import '../../utils/intake_matcher.dart';
+import '../common/kind_picker.dart';
 import '../common/theme.dart';
 import '../common/widgets.dart';
 import 'result_view_model.dart';
@@ -71,6 +72,15 @@ class ResultScreen extends StatelessWidget {
       if (choice != null) vm.changeMedication(line, choice);
     }
 
+    Future<void> pickNewKind(ResultLine line) async {
+      final kind = await pickKind(
+        context,
+        title: '${line.name}은(는) 어떤 약인가요?',
+        current: line.kind,
+      );
+      if (kind != null) vm.setNewKind(line, kind);
+    }
+
     Future<void> addMedication() async {
       final choice = await pick('추가할 약');
       if (choice != null) vm.addMedication(choice);
@@ -120,6 +130,9 @@ class ResultScreen extends StatelessWidget {
                             line: line,
                             correction: vm.correctionOf(line),
                             onTap: () => changeMedication(line),
+                            onPickKind: line.isRegistered
+                                ? null
+                                : () => pickNewKind(line),
                             onDecrement: line.count > 0
                                 ? () => vm.decrement(line)
                                 : null,
@@ -248,11 +261,15 @@ class _ResultRow extends StatelessWidget {
     required this.onTap,
     required this.onDecrement,
     required this.onIncrement,
+    this.onPickKind,
   });
 
   final ResultLine line;
   final Medication? correction;
   final VoidCallback onTap;
+
+  /// 처음 기록하는 약의 종류 고르기. 등록한 약이면 null.
+  final VoidCallback? onPickKind;
   final VoidCallback? onDecrement;
   final VoidCallback onIncrement;
 
@@ -286,6 +303,20 @@ class _ResultRow extends StatelessWidget {
                   children: [
                     Text(line.name, style: AppTypography.bodyStrong),
                     _LineStatus(line: line, correction: correction),
+                    if (onPickKind != null)
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(0, 36),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: onPickKind,
+                        child: Text(
+                          line.kind == null
+                              ? '종류 고르기'
+                              : '종류 · ${line.kind!.label}',
+                        ),
+                      ),
                   ],
                 ),
               ),

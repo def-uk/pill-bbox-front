@@ -3,9 +3,12 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pillbbox/data/models/appearance.dart';
 import 'package:pillbbox/data/models/intake_record.dart';
+import 'package:pillbbox/data/models/medication.dart';
+import 'package:pillbbox/data/models/prescription.dart';
 import 'package:pillbbox/data/repositories/backup_repository.dart';
 import 'package:pillbbox/data/repositories/intake_repository.dart';
 import 'package:pillbbox/data/repositories/medication_repository.dart';
+import 'package:pillbbox/data/repositories/prescription_repository.dart';
 import 'package:pillbbox/data/services/database_service.dart';
 import 'package:pillbbox/utils/xlsx.dart';
 
@@ -15,6 +18,7 @@ void main() {
   late DatabaseService db;
   late MedicationRepository medications;
   late IntakeRepository intakes;
+  late PrescriptionRepository prescriptions;
   late BackupRepository backup;
   var now = DateTime(2026, 10, 30, 8, 10, 23, 456);
 
@@ -23,7 +27,8 @@ void main() {
     final photos = FakePhotoStorageService();
     medications = MedicationRepository(db, photos);
     intakes = IntakeRepository(db, photos, now: () => now);
-    backup = BackupRepository(medications, intakes);
+    prescriptions = PrescriptionRepository(db, medications, now: () => now);
+    backup = BackupRepository(medications, intakes, prescriptions);
   }
 
   setUp(open);
@@ -74,7 +79,12 @@ void main() {
     open();
     final summary = await backup.importExcel(bytes);
 
-    expect(summary, (medications: 2, records: 3, skippedRows: 0));
+    expect(summary, (
+      medications: 2,
+      records: 3,
+      prescriptions: 0,
+      skippedRows: 0,
+    ));
     expect(await savedMedications(), meds);
     expect(await savedRecords(), [
       for (final (name, t, count, source) in records)
@@ -113,6 +123,7 @@ void main() {
     expect(await backup.importExcel(bytes), (
       medications: 0,
       records: 0,
+      prescriptions: 0,
       skippedRows: 0,
     ));
     expect(await intakes.allRecords(), hasLength(1));
@@ -140,7 +151,12 @@ void main() {
       }),
     );
 
-    expect(summary, (medications: 0, records: 1, skippedRows: 0));
+    expect(summary, (
+      medications: 0,
+      records: 1,
+      prescriptions: 0,
+      skippedRows: 0,
+    ));
     expect((await intakes.allRecords()).single.medicationId, mine);
     expect(await savedMedications(), [('부스파', 1900, 1, '')]);
   });
@@ -165,10 +181,13 @@ void main() {
       }),
     );
 
-    expect(summary, (medications: 1, records: 1, skippedRows: 3));
-    expect(await savedMedications(), [
-      ('A', null, 1, '510'),
-    ]);
+    expect(summary, (
+      medications: 1,
+      records: 1,
+      prescriptions: 0,
+      skippedRows: 3,
+    ));
+    expect(await savedMedications(), [('A', null, 1, '510')]);
     expect(await savedRecords(), [
       ('A', DateTime(2026, 10, 30, 12), 1, IntakeSource.manual),
     ]);
@@ -184,6 +203,166 @@ void main() {
         }),
       ),
       throwsFormatException,
+    );
+  });
+
+  test('종류·하루 기준량·처방이 그대로 돌아오고, 같은 처방은 다시 넣지 않는다', () async {
+    final vitamin = await medications.save(
+      categoryId: null,
+      name: '비타민 D',
+      dosePerTake: 1,
+      times: const [480],
+      kind: MedicationKind.supplement,
+      dailyLimit: 2,
+    );
+    final acne = await medications.save(
+      categoryId: 1900,
+      name: '여드름약',
+      dosePerTake: 1,
+      times: const [],
+    );
+    final stomach = await medications.save(
+      categoryId: null,
+      name: '위장약',
+      dosePerTake: 1,
+      times: const [],
+    );
+    await prescriptions.save(
+      startDate: DateTime(2026, 11, 5),
+      days: 28,
+      items: [
+        PrescriptionItem(
+          medicationId: acne,
+          dosePerTake: 1,
+          times: const [480, 1200],
+        ),
+        PrescriptionItem(
+          medicationId: stomach,
+          dosePerTake: 2,
+          times: const [1200],
+        ),
+      ],
+    );
+    await prescriptions.save(
+      startDate: DateTime(2026, 10, 1),
+      days: 7,
+      items: [
+        PrescriptionItem(
+          medicationId: acne,
+          dosePerTake: 1,
+          times: const [480],
+        ),
+      ],
+      status: PrescriptionStatus.ended,
+    );
+    expect(vitamin, isPositive);
+    final bytes = await backup.exportExcel();
+
+    await db.close();
+    open();
+    final summary = await backup.importExcel(bytes);
+    expect(summary, (
+      medications: 3,
+      records: 0,
+      prescriptions: 2,
+      skippedRows: 0,
+    ));
+
+    expect(
+      {
+        for (final m in await medications.getAll())
+          m.name: (m.kind, m.dailyLimit),
+      },
+      {
+        '비타민 D': (MedicationKind.supplement, 2),
+        '여드름약': (MedicationKind.prescription, null),
+        '위장약': (MedicationKind.prescription, null),
+      },
+    );
+    final names = {for (final m in await medications.getAll()) m.id: m.name};
+    expect(
+      [
+        for (final p in await prescriptions.getAll())
+          (
+            p.startDate,
+            p.days,
+            p.status,
+            [
+              for (final i in p.items)
+                '${names[i.medicationId]} ${i.dosePerTake} ${i.times.join(',')}',
+            ].join(' / '),
+          ),
+      ],
+      [
+        (
+          DateTime(2026, 11, 5),
+          28,
+          PrescriptionStatus.active,
+          '여드름약 1 480,1200 / 위장약 2 1200',
+        ),
+        (DateTime(2026, 10, 1), 7, PrescriptionStatus.ended, '여드름약 1 480'),
+      ],
+    );
+
+    expect(await backup.importExcel(bytes), (
+      medications: 0,
+      records: 0,
+      prescriptions: 0,
+      skippedRows: 0,
+    ));
+    expect(await prescriptions.getAll(), hasLength(2));
+  });
+
+  test('종류를 고르지 않은 약은 가져온 파일의 종류를 넣고, 이미 고른 약은 그대로 둔다', () async {
+    await medications.save(
+      categoryId: null,
+      name: 'A',
+      dosePerTake: 1,
+      times: const [],
+    );
+    await medications.save(
+      categoryId: null,
+      name: 'B',
+      dosePerTake: 1,
+      times: const [],
+      kind: MedicationKind.asNeeded,
+    );
+
+    final summary = await backup.importExcel(
+      encodeXlsx({
+        BackupRepository.medicationSheet: [
+          ['이름', '약 번호', '1회 개수', '복용 시간', '종류', '하루 기준량'],
+          ['A', null, 1, null, '영양제', 3],
+          ['B', null, 1, null, '영양제', 3],
+          ['C', null, 1, null, '모르는 종류', null],
+        ],
+        BackupRepository.recordSheet: [
+          ['시각', '약', '개수', '방법'],
+        ],
+        BackupRepository.prescriptionSheet: [
+          ['처방', '시작일', '일수', '상태', '약', '1회 개수', '복용 시간'],
+          [1, '2026-11-05', 0, '진행', 'A', 1, '08:00'],
+          [2, '2026-11-05', 7, '진행', '없는 약', 1, '08:00'],
+          [3, '2026-11-05', 7, '진행', 'B', 1, null],
+        ],
+      }),
+    );
+
+    expect(summary, (
+      medications: 0,
+      records: 0,
+      prescriptions: 0,
+      skippedRows: 4,
+    ));
+    expect(
+      {
+        for (final m in await medications.getAll())
+          m.name: (m.kind, m.dailyLimit),
+      },
+      {
+        'A': (MedicationKind.supplement, 3),
+        'B': (MedicationKind.asNeeded, null),
+      },
     );
   });
 }

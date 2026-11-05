@@ -8,6 +8,7 @@ import '../../data/models/medication.dart';
 import '../../data/models/pill_label.dart';
 import '../../data/repositories/intake_repository.dart';
 import '../../data/repositories/medication_repository.dart';
+import '../../data/repositories/prescription_repository.dart';
 import '../../data/services/detection_mapper.dart';
 import '../../data/services/pill_detector.dart';
 import '../../data/services/pill_label_service.dart';
@@ -26,6 +27,7 @@ class ResultLine {
     required this.name,
     required this.count,
     required this.expected,
+    this.kind,
   });
 
   /// 등록한 약. 처음 기록하는 약이면 null이고, 저장할 때 등록한다.
@@ -36,6 +38,9 @@ class ResultLine {
 
   /// 지금 먹어야 할 개수. 지금 예정에 없으면 0.
   final int expected;
+
+  /// 처음 기록하는 약에 고른 종류. 고르지 않았으면 null. 등록한 약은 [Medication.kind]를 본다.
+  final MedicationKind? kind;
 
   bool get isRegistered => medication != null;
   MatchStatus get status => matchStatus(expected: expected, recognized: count);
@@ -89,6 +94,7 @@ class ResultViewModel extends ChangeNotifier {
     required this._medications,
     required this._intakes,
     required this._labels,
+    this._prescriptions,
     Future<List<FoundObject>> Function(Uint8List photo)? objectFinder,
     DateTime Function()? now,
   }) : _findObjects = objectFinder ?? findPhotoObjects,
@@ -99,6 +105,7 @@ class ResultViewModel extends ChangeNotifier {
   final MedicationRepository _medications;
   final IntakeRepository _intakes;
   final PillLabelService _labels;
+  final PrescriptionRepository? _prescriptions;
   final Future<List<FoundObject>> Function(Uint8List photo) _findObjects;
   final DateTime Function() _now;
   bool _disposed = false;
@@ -134,6 +141,9 @@ class ResultViewModel extends ChangeNotifier {
   /// toDetections가 labels.json에 없는 클래스에 주는 음수(-1, -2, ...)와 겹치지 않게 한다.
   static const _customKeyStart = -1000000;
   int _nextCustomKey = _customKeyStart;
+
+  /// 처음 기록하는 약에 고른 종류. category_id(줄 키) → 종류.
+  final _newKinds = <int, MedicationKind>{};
 
   /// 물체에 고른 약과 그 물체의 색·모양. 저장할 때 남겨 다음 사진에서 추천한다.
   final _picked = <(_Target, Appearance)>[];
@@ -191,8 +201,23 @@ class ResultViewModel extends ChangeNotifier {
           count: _counts[id] ?? 0,
           expected: _due[id] ?? 0,
         ),
-      ..._unregistered.values,
+      for (final l in _unregistered.values)
+        ResultLine(
+          medication: null,
+          categoryId: l.categoryId,
+          name: l.name,
+          count: l.count,
+          expected: 0,
+          kind: _newKinds[l.categoryId],
+        ),
     ];
+  }
+
+  /// 처음 기록하는 약 [line]의 종류를 정한다. 저장할 때 이 종류로 등록한다.
+  void setNewKind(ResultLine line, MedicationKind kind) {
+    if (line.isRegistered) return;
+    _newKinds[line.categoryId!] = kind;
+    _notify();
   }
 
   bool get canSave =>
@@ -206,7 +231,11 @@ class ResultViewModel extends ChangeNotifier {
       medications = await _medications.getAll();
       _allLabels = await _labels.load();
       final records = await _intakes.recordsOn(now);
-      _due = dueNow(summarizeDay(medications, records), now);
+      final prescriptions = await _prescriptions?.scheduledOn(now) ?? const [];
+      _due = dueNow(
+        summarizeDay(medications, records, prescriptions: prescriptions),
+        now,
+      );
     } catch (e) {
       errorMessage = '기록을 불러오지 못했습니다';
       status = ResultStatus.failed;
@@ -495,6 +524,8 @@ class ResultViewModel extends ChangeNotifier {
         name: line.name,
         dosePerTake: line.count,
         times: const [],
+        kind: _newKinds[line.categoryId],
+        dailyLimit: line.count,
       );
       _unregistered.remove(line.categoryId);
       _retarget(

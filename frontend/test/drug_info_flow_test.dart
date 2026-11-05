@@ -43,6 +43,8 @@ void main() {
       tester,
       find.text('식약처 의약품 · 사진으로 인식되지 않아 직접 기록만 됩니다'),
     );
+    await tester.tap(find.text('필요할 때'));
+    await tester.pump();
     await tester.tap(find.text('저장'));
 
     // 약 관리 → 다시 열어 약 정보

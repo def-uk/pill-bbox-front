@@ -221,20 +221,22 @@ web/pill_detector_worker.js   # 웹 탐지 (onnxruntime-web, 사진 디코드)
 
 | 테이블 | 열 |
 |---|---|
-| `medications` | `id`, `category_id`(96종 중 하나, 직접 등록한 약은 null), `name`, `dose_per_take` |
+| `medications` | `id`, `category_id`(96종 중 하나, 직접 등록한 약은 null), `name`, `dose_per_take`, `kind`(supplement/prescription/asNeeded, 고르기 전에는 null), `daily_limit`(영양제 하루 권장량) (종류·권장량은 DB 버전 4) |
 | `schedules` | `id`, `medication_id`, `time`(HH:mm) |
 | `intake_records` | `id`, `medication_id`, `taken_at`, `count`, `source`(camera/manual, camera는 사진으로 남긴 기록), `photo_path` |
 | `appearances` | `id`, `medication_id`, `l`, `a`, `b`, `elongation`. 알 수 없는 물체에 고른 약의 색·모양 (DB 버전 2, 3.6) |
 | `drug_infos` | `medication_id`, `item_seq`(식약처 품목기준코드), `data`(받은 약 정보 JSON), `fetched_at`. 약마다 이어 둔 식약처 정보 (DB 버전 3, 5.4). 공공 정보라 다시 받으면 되므로 백업에 넣지 않음 |
+| `prescriptions` | `id`, `start_date`(yyyy-MM-dd), `days`, `status`(active/defeated/ended), `created_at`. 병원에서 한 번에 받은 약 묶음 (DB 버전 4, MVP.md 4.2) |
+| `prescription_items` | `id`, `prescription_id`, `medication_id`, `dose_per_take`(1회 알 수), `times`(회차 시간 HH:mm를 쉼표로). 처방 속 약. 처방 기간 안의 날에는 회차가 그날 일정에 들어가고, 같은 약·같은 시간이 겹치면 많은 쪽 하나만 둠 |
 
 사진은 앱 전용 폴더(웹은 브라우저 안 별도 DB)에만 저장하고, 기록을 지우면 함께 지웁니다.
 
 웹은 기록이 **그 브라우저에만** 남습니다. 사이트 데이터를 지우면 기록도 지워지고, iOS Safari는 7일 동안 열지 않은 사이트의 저장소를 지울 수 있으므로 홈 화면에 추가해 쓰도록 안내합니다.
 
-그래서 약·기록·색·모양을 엑셀(.xlsx)로 내보내고 가져옵니다(`BackupRepository`). 시트는 `약`(이름, 약 번호, 1회 개수, 복용 시간), `기록`(시각, 약, 개수, 방법), `색·모양`입니다. 기록은 약 이름으로 잇습니다.
+그래서 약·기록·색·모양·처방을 엑셀(.xlsx)로 내보내고 가져옵니다(`BackupRepository`). 시트는 `약`(이름, 약 번호, 1회 개수, 복용 시간, 종류, 하루 기준량), `기록`(시각, 약, 개수, 방법), `색·모양`, `처방`(처방 번호, 시작일, 일수, 상태, 약, 1회 개수, 복용 시간. 처방 속 약 하나가 한 행)입니다. 기록과 처방은 약 이름으로 잇습니다. 종류·하루 기준량 칸과 `처방` 시트가 없는 예전 파일도 읽습니다.
 
 - 사진은 넣지 않습니다. 엑셀 칸 하나에 담기 어렵고, 기록을 옮기는 데는 없어도 됩니다.
-- 가져오기는 지금 데이터에 합칩니다. 약은 약 번호나 이름이 같으면 같은 약으로 보고 지금 설정을 그대로 두고, 기록은 같은 약·시각(초까지)·개수면 건너뜁니다. 같은 파일을 두 번 가져와도 겹치지 않습니다.
+- 가져오기는 지금 데이터에 합칩니다. 약은 약 번호나 이름이 같으면 같은 약으로 보고 지금 설정을 그대로 두되 종류를 고르지 않은 약이면 파일의 종류를 넣고, 처방은 시작일·일수·약이 모두 같으면 건너뛰며, 기록은 같은 약·시각(초까지)·개수면 건너뜁니다. 같은 파일을 두 번 가져와도 겹치지 않습니다.
 - 엑셀에서 고쳐 저장한 파일(공유 문자열, 날짜·시각 서식)도 읽습니다. 읽을 수 없는 행은 건너뛰고 몇 행인지 알립니다.
 - `excel` 패키지는 `image`와 `archive` 버전이 맞지 않아, xlsx를 `archive`·`xml`로 직접 읽고 씁니다(`lib/utils/xlsx.dart`).
 

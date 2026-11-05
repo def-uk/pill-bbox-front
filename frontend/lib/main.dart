@@ -8,6 +8,7 @@ import 'data/repositories/backup_repository.dart';
 import 'data/repositories/drug_info_repository.dart';
 import 'data/repositories/intake_repository.dart';
 import 'data/repositories/medication_repository.dart';
+import 'data/repositories/prescription_repository.dart';
 import 'data/services/backup_file_service.dart';
 import 'data/services/database_service.dart';
 import 'data/services/drug_info_service.dart';
@@ -92,8 +93,13 @@ class _PillboxAppState extends State<PillboxApp> {
         ChangeNotifierProvider(
           create: (_) => IntakeRepository(widget.database, widget.photos),
         ),
+        ChangeNotifierProvider(
+          create: (context) =>
+              PrescriptionRepository(widget.database, context.read()),
+        ),
         Provider(
-          create: (context) => BackupRepository(context.read(), context.read()),
+          create: (context) =>
+              BackupRepository(context.read(), context.read(), context.read()),
         ),
         Provider(
           create: (_) => DrugInfoRepository(

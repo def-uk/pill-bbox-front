@@ -3,11 +3,13 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/drug_info.dart';
+import '../../data/models/medication.dart';
 import '../../data/models/pill_label.dart';
 import '../../utils/time_format.dart';
+import '../common/kind_picker.dart';
 import '../common/medication_picker.dart';
 import '../common/theme.dart';
-import '../common/drug_widgets.dart';
+import '../common/drug_search_sheet.dart';
 import '../common/widgets.dart';
 import 'medication_edit_view_model.dart';
 
@@ -24,7 +26,7 @@ class MedicationEditScreen extends StatelessWidget {
         context: context,
         isScrollControlled: true,
         showDragHandle: true,
-        builder: (_) => _LabelSearchSheet(
+        builder: (_) => DrugSearchSheet(
           labels: vm.availableLabels,
           searchDrugs: vm.canSearchDrugs ? vm.searchDrugs : null,
           drugImageUrl: vm.drugImageUrl,
@@ -142,6 +144,70 @@ class MedicationEditScreen extends StatelessWidget {
                   ),
                 ],
               ),
+            const SectionLabel('종류'),
+            KindSelector(kind: vm.kind, onChanged: vm.setKind),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xxs,
+                AppSpacing.xs,
+                AppSpacing.xxs,
+                0,
+              ),
+              child: Text(
+                switch (vm.kind) {
+                  null => '종류를 골라 주세요',
+                  MedicationKind.prescription =>
+                    '${kindDescription(MedicationKind.prescription)} · 기간과 회차는 처방 등록에서 넣어요',
+                  final k => kindDescription(k),
+                },
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.inkMuted,
+                ),
+              ),
+            ),
+            if (vm.kind == MedicationKind.supplement) ...[
+              const SizedBox(height: AppSpacing.sm),
+              GroupCard(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.gutter,
+                      AppSpacing.sm,
+                      AppSpacing.sm,
+                      AppSpacing.sm,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('하루 권장량', style: textTheme.bodyLarge),
+                              Text(
+                                '제품에 적힌 하루 섭취량',
+                                style: AppTypography.caption.copyWith(
+                                  color: AppColors.inkMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        CountStepper(
+                          label: '${vm.dailyLimit}정',
+                          decrementTooltip: '하루 권장량 1정 줄이기',
+                          incrementTooltip: '하루 권장량 1정 늘리기',
+                          onDecrement: vm.dailyLimit > 1
+                              ? () => vm.setDailyLimit(vm.dailyLimit - 1)
+                              : null,
+                          onIncrement: () =>
+                              vm.setDailyLimit(vm.dailyLimit + 1),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SectionLabel('1회 수량'),
             GroupCard(
               children: [
@@ -215,175 +281,6 @@ class MedicationEditScreen extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// 모델이 아는 약에서 고르고, 없으면 식약처 의약품에서 찾는다.
-/// [PillLabel]이나 [DrugSummary]를 돌려준다.
-class _LabelSearchSheet extends StatefulWidget {
-  const _LabelSearchSheet({
-    required this.labels,
-    required this.searchDrugs,
-    required this.drugImageUrl,
-  });
-
-  final List<PillLabel> labels;
-
-  /// null이면 식약처에서 찾지 않는다 (서버 없는 빌드).
-  final Future<DrugPage> Function(String query)? searchDrugs;
-  final String Function(String itemSeq) drugImageUrl;
-
-  @override
-  State<_LabelSearchSheet> createState() => _LabelSearchSheetState();
-}
-
-class _LabelSearchSheetState extends State<_LabelSearchSheet> {
-  String _query = '';
-
-  /// 식약처에서 찾은 이름과 결과. 이름을 바꾸면 다시 찾을 때까지 숨긴다.
-  String? _drugQuery;
-  Future<DrugPage>? _drugResults;
-
-  /// 식약처는 두 글자부터 찾는다. 한 글자는 결과가 너무 많다.
-  bool get _canSearchDrugs =>
-      widget.searchDrugs != null && _query.characters.length >= 2;
-
-  void _searchDrugs() {
-    if (!_canSearchDrugs) return;
-    setState(() {
-      _drugQuery = _query;
-      _drugResults = widget.searchDrugs!(_query);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final matches = [
-      for (final l in widget.labels)
-        if (l.name.toLowerCase().contains(_query.toLowerCase())) l,
-    ];
-    final searching = widget.searchDrugs != null;
-    final showDrugs = _drugResults != null && _drugQuery == _query;
-    return SafeArea(
-      child: SizedBox(
-        height: MediaQuery.sizeOf(context).height * 0.75,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SheetTitle('약 고르기'),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.gutter,
-              ),
-              child: SearchField(
-                autofocus: true,
-                hintText: '약 이름 검색',
-                onChanged: (value) => setState(() => _query = value.trim()),
-                onSubmitted: searching ? (_) => _searchDrugs() : null,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Expanded(
-              child: matches.isEmpty && !searching
-                  ? const Center(child: Text('찾는 약이 없습니다'))
-                  : ListView(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                      children: [
-                        if (searching && matches.isNotEmpty)
-                          const SheetSectionLabel('사진으로 인식되는 약'),
-                        for (final l in matches)
-                          ListTile(
-                            title: Text(l.name),
-                            onTap: () => Navigator.pop(context, l),
-                          ),
-                        if (searching) ...[
-                          const SheetSectionLabel('식약처 의약품'),
-                          if (showDrugs)
-                            _DrugResults(
-                              results: _drugResults!,
-                              imageUrl: widget.drugImageUrl,
-                              onRetry: _searchDrugs,
-                            )
-                          else
-                            ListTile(
-                              leading: const Icon(Icons.travel_explore_rounded),
-                              title: Text(
-                                _canSearchDrugs
-                                    ? '식약처에서 \'$_query\' 찾기'
-                                    : '식약처에서 찾기',
-                              ),
-                              subtitle: _canSearchDrugs
-                                  ? null
-                                  : const Text('이름을 두 글자 넘게 넣어 주세요'),
-                              enabled: _canSearchDrugs,
-                              onTap: _searchDrugs,
-                            ),
-                        ],
-                      ],
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DrugResults extends StatelessWidget {
-  const _DrugResults({
-    required this.results,
-    required this.imageUrl,
-    required this.onRetry,
-  });
-
-  final Future<DrugPage> results;
-  final String Function(String itemSeq) imageUrl;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: results,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return ListTile(
-            leading: const Icon(Icons.error_outline_rounded),
-            title: Text('${snapshot.error}'),
-            trailing: TextButton(onPressed: onRetry, child: const Text('다시')),
-          );
-        }
-        final page = snapshot.data;
-        if (page == null) {
-          return const Padding(
-            padding: EdgeInsets.all(AppSpacing.lg),
-            child: Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (page.items.isEmpty) {
-          return const ListTile(title: Text('식약처에도 없는 약입니다'));
-        }
-        return Column(
-          children: [
-            for (final drug in page.items)
-              DrugTile(
-                drug: drug,
-                imageUrl: imageUrl,
-                onTap: () => Navigator.pop(context, drug),
-              ),
-            if (page.total > page.items.length)
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                child: Text(
-                  '${page.total}개 중 ${page.items.length}개. 이름을 더 자세히 넣어 보세요',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted),
-                ),
-              ),
-          ],
-        );
-      },
     );
   }
 }

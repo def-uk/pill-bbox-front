@@ -4,26 +4,51 @@ import '../../utils/time_format.dart';
 import '../../utils/xlsx.dart';
 import '../models/appearance.dart';
 import '../models/intake_record.dart';
+import '../models/medication.dart';
+import '../models/prescription.dart';
 import 'intake_repository.dart';
 import 'medication_repository.dart';
+import 'prescription_repository.dart';
 
-/// 가져오기 결과. 이미 있던 약·기록은 세지 않는다.
-typedef ImportSummary = ({int medications, int records, int skippedRows});
+/// 가져오기 결과. 이미 있던 약·기록·처방은 세지 않는다.
+typedef ImportSummary = ({
+  int medications,
+  int records,
+  int prescriptions,
+  int skippedRows,
+});
 
-/// 약, 복용 기록, 색·모양을 엑셀(.xlsx)로 내보내고 가져온다. 웹은 기록이 브라우저에만 있어 백업에 쓴다.
+/// 약, 복용 기록, 색·모양, 처방을 엑셀(.xlsx)로 내보내고 가져온다. 웹은 기록이 브라우저에만 있어 백업에 쓴다.
 ///
 /// 사진은 넣지 않는다. 가져오기는 지금 데이터에 합친다: 약은 약 번호나 이름이 같으면 같은 약으로 보고
-/// 그대로 두며, 기록은 같은 약·시각·개수면 건너뛴다.
+/// 그대로 두되 종류를 고르지 않은 약이면 파일의 종류를 넣는다. 기록은 같은 약·시각·개수면,
+/// 처방은 시작일·일수·약이 모두 같으면 건너뛴다.
 class BackupRepository {
-  BackupRepository(this._medications, this._intakes);
+  BackupRepository(this._medications, this._intakes, this._prescriptions);
 
   final MedicationRepository _medications;
   final IntakeRepository _intakes;
+  final PrescriptionRepository _prescriptions;
 
   static const medicationSheet = '약';
   static const recordSheet = '기록';
   static const appearanceSheet = '색·모양';
+  static const prescriptionSheet = '처방';
+
+  /// 앞 네 칸은 처음부터 있던 칸이라 머리글을 맞춰 본다. 종류·하루 기준량은 DB 버전 4에 더했다.
   static const _medicationHeader = ['이름', '약 번호', '1회 개수', '복용 시간'];
+  static const _medicationExtraHeader = ['종류', '하루 기준량'];
+
+  /// 처방 속 약 하나가 한 행이다. 같은 처방은 '처방' 번호가 같다.
+  static const _prescriptionHeader = [
+    '처방',
+    '시작일',
+    '일수',
+    '상태',
+    '약',
+    '1회 개수',
+    '복용 시간',
+  ];
   static const _recordHeader = ['시각', '약', '개수', '방법'];
   static const _appearanceHeader = ['약', 'L', 'a', 'b', '길쭉함'];
   static const _sources = {
@@ -36,13 +61,15 @@ class BackupRepository {
     final names = {for (final m in medications) m.id: m.name};
     return encodeXlsx({
       medicationSheet: [
-        _medicationHeader,
+        [..._medicationHeader, ..._medicationExtraHeader],
         for (final m in medications)
           [
             m.name,
             m.categoryId,
             m.dosePerTake,
             m.times.map(formatMinuteOfDay).join(', '),
+            m.kind?.label,
+            m.dailyLimit,
           ],
       ],
       recordSheet: [
@@ -60,6 +87,20 @@ class BackupRepository {
         for (final (id, a) in await _medications.appearances())
           [names[id], a.l, a.a, a.b, a.elongation],
       ],
+      prescriptionSheet: [
+        _prescriptionHeader,
+        for (final (i, p) in (await _prescriptions.getAll()).indexed)
+          for (final item in p.items)
+            [
+              i + 1,
+              dateKey(p.startDate),
+              p.days,
+              p.status.label,
+              names[item.medicationId],
+              item.dosePerTake,
+              item.times.map(formatMinuteOfDay).join(', '),
+            ],
+      ],
     });
   }
 
@@ -73,10 +114,17 @@ class BackupRepository {
     final appearanceRows = sheets.containsKey(appearanceSheet)
         ? _rows(sheets, appearanceSheet, _appearanceHeader)
         : const <List<Object?>>[];
+    final prescriptionRows = sheets.containsKey(prescriptionSheet)
+        ? _rows(sheets, prescriptionSheet, _prescriptionHeader)
+        : const <List<Object?>>[];
     var skipped = 0;
 
     final existing = await _medications.getAll();
     final byName = {for (final m in existing) m.name: m.id};
+    final untyped = {
+      for (final m in existing)
+        if (m.kind == null) m.id,
+    };
     final byCategory = {
       for (final m in existing)
         if (m.categoryId != null) m.categoryId!: m.id,
@@ -87,13 +135,23 @@ class BackupRepository {
       final categoryId = _int(row, 1);
       final dose = _int(row, 2) ?? 1;
       final times = _times(_cell(row, 3));
-      if (name == null || dose <= 0 || times == null) {
+      final kindText = _string(row, 4);
+      final kind = _kinds[kindText];
+      final dailyLimit = _int(row, 5);
+      if (name == null ||
+          dose <= 0 ||
+          times == null ||
+          (kindText != null && kind == null) ||
+          (dailyLimit != null && dailyLimit <= 0)) {
         skipped++;
         continue;
       }
       final id = byCategory[categoryId] ?? byName[name];
       if (id != null) {
         byName[name] = id;
+        if (kind != null && untyped.remove(id)) {
+          await _medications.setKind([id], kind, dailyLimit: dailyLimit);
+        }
         continue;
       }
       final newId = await _medications.save(
@@ -101,6 +159,8 @@ class BackupRepository {
         name: name,
         dosePerTake: dose,
         times: times,
+        kind: kind,
+        dailyLimit: dailyLimit,
       );
       byName[name] = newId;
       if (categoryId != null) byCategory[categoryId] = newId;
@@ -150,12 +210,114 @@ class BackupRepository {
       );
     }
 
+    final addedPrescriptions = await _importPrescriptions(
+      prescriptionRows,
+      byName,
+      onSkip: () => skipped++,
+    );
+
     return (
       medications: addedMedications,
       records: addedRecords,
+      prescriptions: addedPrescriptions,
       skippedRows: skipped,
     );
   }
+
+  /// 처방 행을 처방 번호로 묶어 등록한다. 읽을 수 없는 행은 [onSkip]. 등록한 처방 수를 돌려준다.
+  Future<int> _importPrescriptions(
+    List<List<Object?>> rows,
+    Map<String, int> medicationIds, {
+    required void Function() onSkip,
+  }) async {
+    final groups =
+        <
+          int,
+          ({
+            DateTime startDate,
+            int days,
+            PrescriptionStatus status,
+            List<PrescriptionItem> items,
+          })
+        >{};
+    for (final row in rows) {
+      final number = _int(row, 0);
+      final start = _dateTime(_cell(row, 1));
+      final days = _int(row, 2);
+      final status = _statuses[_string(row, 3)];
+      final medicationId = medicationIds[_string(row, 4)];
+      final dose = _int(row, 5);
+      final times = _times(_cell(row, 6));
+      final group = number == null ? null : groups[number];
+      if (number == null ||
+          start == null ||
+          days == null ||
+          days <= 0 ||
+          status == null ||
+          medicationId == null ||
+          dose == null ||
+          dose <= 0 ||
+          times == null ||
+          times.isEmpty ||
+          // 같은 처방 번호의 행은 시작일·일수가 같아야 한다.
+          (group != null &&
+              (dateKey(group.startDate) != dateKey(start) ||
+                  group.days != days))) {
+        onSkip();
+        continue;
+      }
+      final item = PrescriptionItem(
+        medicationId: medicationId,
+        dosePerTake: dose,
+        times: times,
+      );
+      if (group == null) {
+        groups[number] = (
+          startDate: DateTime(start.year, start.month, start.day),
+          days: days,
+          status: status,
+          items: [item],
+        );
+      } else {
+        group.items.add(item);
+      }
+    }
+
+    final known = {
+      for (final p in await _prescriptions.getAll())
+        _signature(p.startDate, p.days, p.items),
+    };
+    var added = 0;
+    for (final p in groups.values) {
+      if (!known.add(_signature(p.startDate, p.days, p.items))) continue;
+      await _prescriptions.save(
+        startDate: p.startDate,
+        days: p.days,
+        items: p.items,
+        status: p.status,
+      );
+      added++;
+    }
+    return added;
+  }
+
+  /// 같은 처방인지 볼 때 쓰는 값: 시작일, 일수, 약마다 1회 알 수와 회차 시간.
+  static String _signature(
+    DateTime start,
+    int days,
+    List<PrescriptionItem> items,
+  ) {
+    final parts = [
+      for (final i in items)
+        '${i.medicationId}:${i.dosePerTake}:${PrescriptionItem.encodeTimes(i.times)}',
+    ]..sort();
+    return '${dateKey(start)}|$days|${parts.join(';')}';
+  }
+
+  static final _kinds = {for (final k in MedicationKind.values) k.label: k};
+  static final _statuses = {
+    for (final s in PrescriptionStatus.values) s.label: s,
+  };
 
   /// [name] 시트의 머리글 아래 행들. 비어 있는 행은 뺀다.
   static List<List<Object?>> _rows(

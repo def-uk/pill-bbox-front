@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../data/models/drug_info.dart';
+import '../../data/models/medication.dart';
 import '../../data/models/pill_label.dart';
 import '../../data/repositories/drug_info_repository.dart';
 import '../../data/repositories/medication_repository.dart';
@@ -35,6 +36,12 @@ class MedicationEditViewModel extends ChangeNotifier {
   int dosePerTake = 1;
   List<int> times = const [];
 
+  /// 고르기 전에는 null. 저장하려면 골라야 한다.
+  MedicationKind? kind;
+
+  /// 영양제의 하루 권장량(알).
+  int dailyLimit = 1;
+
   /// 이번에 식약처에서 고른 약. 저장할 때 약 정보를 이어 둔다.
   DrugSummary? pickedDrug;
 
@@ -61,7 +68,8 @@ class MedicationEditViewModel extends ChangeNotifier {
   String drugImageUrl(String itemSeq) => _drugs.imageUrl(itemSeq);
 
   bool get isNew => medicationId == null;
-  bool get canSave => !loading && !saving && name.trim().isNotEmpty;
+  bool get canSave =>
+      !loading && !saving && name.trim().isNotEmpty && kind != null;
 
   /// 시간 추가 화면의 처음 값: 마지막 시간 4시간 뒤, 없으면 08:00.
   int get suggestedTime =>
@@ -88,6 +96,8 @@ class MedicationEditViewModel extends ChangeNotifier {
       name = current.name;
       dosePerTake = current.dosePerTake;
       times = current.times;
+      kind = current.kind;
+      dailyLimit = current.dailyLimit ?? _suggestedDailyLimit;
     }
     loading = false;
     notifyListeners();
@@ -119,6 +129,24 @@ class MedicationEditViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 하루 권장량의 처음 값: 1회 수량 × 하루 횟수.
+  int get _suggestedDailyLimit =>
+      dosePerTake * (times.isEmpty ? 1 : times.length);
+
+  void setKind(MedicationKind value) {
+    if (value == MedicationKind.supplement && kind != value) {
+      dailyLimit = _suggestedDailyLimit;
+    }
+    kind = value;
+    notifyListeners();
+  }
+
+  void setDailyLimit(int value) {
+    if (value < 1) return;
+    dailyLimit = value;
+    notifyListeners();
+  }
+
   void setDose(int value) {
     if (value < 1) return;
     dosePerTake = value;
@@ -146,6 +174,8 @@ class MedicationEditViewModel extends ChangeNotifier {
       name: name.trim(),
       dosePerTake: dosePerTake,
       times: times,
+      kind: kind,
+      dailyLimit: dailyLimit,
     );
     if (_drugChanged) {
       final drug = pickedDrug;

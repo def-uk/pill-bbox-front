@@ -5,9 +5,11 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/intake_record.dart';
+import '../../data/models/medication.dart';
 import '../../data/services/photo_picker_service.dart';
 import '../../utils/intake_matcher.dart';
 import '../../utils/time_format.dart';
+import '../common/kind_picker.dart';
 import '../common/medication_picker.dart';
 import '../common/theme.dart';
 import '../common/widgets.dart';
@@ -28,6 +30,18 @@ class HomeScreen extends StatelessWidget {
       );
       if (ok) await vm.markTaken(slot);
     }
+
+    Future<void> chooseKind(Medication medication) async {
+      final kind = await pickKind(
+        context,
+        title: '${medication.name}은(는) 어떤 약인가요?',
+      );
+      if (kind != null) await vm.setKind(medication, kind);
+    }
+
+    final kindPrompt = vm.untyped.isEmpty
+        ? null
+        : _KindPrompt(medications: vm.untyped, onTap: chooseKind);
 
     void showResult(Uint8List? photo) {
       if (photo != null && context.mounted) {
@@ -72,10 +86,11 @@ class HomeScreen extends StatelessWidget {
       try {
         final summary = await vm.importExcel();
         if (summary == null) return;
-        final (:medications, :records, :skippedRows) = summary;
-        message = medications == 0 && records == 0
+        final (:medications, :records, :prescriptions, :skippedRows) = summary;
+        message = medications == 0 && records == 0 && prescriptions == 0
             ? '새로 가져올 약이나 기록이 없습니다'
-            : '약 $medications개, 기록 $records개를 가져왔습니다';
+            : '약 $medications개, 기록 $records개'
+                  '${prescriptions > 0 ? ', 처방 $prescriptions개' : ''}를 가져왔습니다';
         if (skippedRows > 0) message += ' · 읽지 못한 행 $skippedRows개';
       } on FormatException catch (e) {
         message = e.message;
@@ -180,15 +195,19 @@ class HomeScreen extends StatelessWidget {
       ),
       body: switch (vm) {
         HomeViewModel(loading: true) => const LoadingState(),
-        HomeViewModel(summary: DaySummary(slots: [], unscheduled: [])) =>
-          _EmptyGuide(
-            onTrySample: () async => showResult(await vm.loadSamplePhoto()),
-            onSetSchedule: () => context.push('/medications'),
-          ),
+        HomeViewModel(isEmpty: true) => _EmptyGuide(
+          header: kindPrompt,
+          onTrySample: () async => showResult(await vm.loadSamplePhoto()),
+          onSetSchedule: () => context.push('/medications'),
+        ),
         _ => ListView(
           // 아래 떠 있는 기록하기 버튼에 마지막 카드가 가리지 않게 비워 둔다.
           padding: pagePadding(context, bottom: 120),
           children: [
+            if (kindPrompt != null) ...[
+              kindPrompt,
+              const SizedBox(height: AppSpacing.xl),
+            ],
             for (final (i, (time, slots)) in vm.slotsByTime.indexed) ...[
               // 시간대 카드 사이는 섹션처럼 32를 비워 덩어리로 읽히게 한다.
               if (i > 0) const SizedBox(height: AppSpacing.xl),
@@ -300,7 +319,7 @@ class _DoseCard extends StatelessWidget {
           _Row(
             leading: StatusDot(taken: slot.isDone),
             title: slot.medication.name,
-            subtitle: '1회 ${slot.medication.dosePerTake}정',
+            subtitle: '1회 ${slot.dose}정',
             trailing: _SlotStatus(slot: slot),
             onTap: slot.isDone ? null : () => onTap(slot),
           ),
@@ -422,7 +441,7 @@ class _SlotStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dose = slot.medication.dosePerTake;
+    final dose = slot.dose;
     final (text, color) = switch (slot) {
       DoseSlot(isDone: true) => ('완료', AppColors.primary),
       DoseSlot(taken: > 0) => ('$dose정 중 ${slot.taken}정', reviewColor),
@@ -439,10 +458,61 @@ class _SlotStatus extends StatelessWidget {
   }
 }
 
+/// 업데이트 전에 등록해 종류가 없는 약. 눌러서 종류를 고른다 (docs/MVP.md 10장).
+class _KindPrompt extends StatelessWidget {
+  const _KindPrompt({required this.medications, required this.onTap});
+
+  final List<Medication> medications;
+  final void Function(Medication) onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GroupCard(
+      highlighted: true,
+      children: [
+        const _CardHeader(title: '약 종류를 골라 주세요'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.gutter,
+            0,
+            AppSpacing.gutter,
+            AppSpacing.xs,
+          ),
+          child: Text(
+            '영양제, 처방약, 필요할 때 먹는 약에 따라 하루 기준이 달라져요.',
+            style: AppTypography.caption.copyWith(color: AppColors.inkMuted),
+          ),
+        ),
+        for (final m in medications)
+          _Row(
+            leading: const Icon(
+              Icons.help_outline_rounded,
+              size: 22,
+              color: AppColors.inkMuted,
+            ),
+            title: m.name,
+            subtitle: '종류 없음',
+            trailing: Text(
+              '고르기',
+              style: AppTypography.callout.copyWith(color: AppColors.primary),
+            ),
+            onTap: () => onTap(m),
+          ),
+      ],
+    );
+  }
+}
+
 /// 오늘 기록도 일정도 없을 때(`empty-guide`). 무엇을 하면 되는지와 잘 찍는 법을 함께 보여 준다.
 class _EmptyGuide extends StatelessWidget {
-  const _EmptyGuide({required this.onTrySample, required this.onSetSchedule});
+  const _EmptyGuide({
+    this.header,
+    required this.onTrySample,
+    required this.onSetSchedule,
+  });
 
+  /// 안내 위에 둘 카드. 종류를 고르지 않은 약이 있을 때.
+  final Widget? header;
   final VoidCallback onTrySample;
   final VoidCallback onSetSchedule;
 
@@ -452,6 +522,7 @@ class _EmptyGuide extends StatelessWidget {
     return ListView(
       padding: pagePadding(context, top: AppSpacing.lg, bottom: 120),
       children: [
+        if (header != null) ...[header!, const SizedBox(height: AppSpacing.xl)],
         Text('오늘 기록이 없습니다', style: textTheme.headlineMedium),
         const SizedBox(height: AppSpacing.xs),
         Text(
