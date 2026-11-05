@@ -2,9 +2,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from . import drugs
 from .api import VaultLimiter, router
 from .config import Settings
 from .db import create_db
+from .mfds import DrugInfoSource, MfdsSource
 
 
 class BodyLimit:
@@ -58,20 +60,28 @@ class BodyLimit:
 _TOO_LARGE = "요청이 너무 큽니다"
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
-    """`uvicorn app.main:create_app --factory`로 띄운다. 테스트는 설정을 넘겨 따로 만든다."""
+def create_app(
+    settings: Settings | None = None, drug_source: DrugInfoSource | None = None
+) -> FastAPI:
+    """`uvicorn app.main:create_app --factory`로 띄운다. 테스트는 설정과 가짜 약 정보를 넘긴다."""
     settings = settings or Settings()
     app = FastAPI(
         title="pillbbox 백엔드",
-        description="사진 수집과 백업 (backend/README.md)",
+        description="사진 수집, 백업, 약 정보 (backend/README.md)",
         version="0.1.0",
     )
     app.state.settings = settings
     app.state.sessions = create_db(settings.database_url)
     app.state.vault_limiter = VaultLimiter(settings.vaults_per_hour)
+    if drug_source is None and settings.mfds_service_key:
+        drug_source = MfdsSource(settings.mfds_service_key)
+    app.state.drugs = drugs.Drugs(
+        drug_source, settings.drug_calls_per_hour, settings.drug_cache_seconds
+    )
     settings.samples_dir.mkdir(parents=True, exist_ok=True)
 
     app.include_router(router)
+    app.include_router(drugs.router)
 
     @app.get("/health")
     def health() -> dict[str, str]:

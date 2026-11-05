@@ -18,7 +18,7 @@ class DatabaseService {
     return _factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 2,
+        version: 3,
         onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
         onCreate: _create,
         onUpgrade: _upgrade,
@@ -54,12 +54,14 @@ class DatabaseService {
         'CREATE INDEX idx_intake_records_taken_at ON intake_records(taken_at)',
       );
     _createAppearances(batch);
+    _createDrugInfos(batch);
     await batch.commit(noResult: true);
   }
 
   Future<void> _upgrade(Database db, int from, int to) async {
     final batch = db.batch();
     if (from < 2) _createAppearances(batch);
+    if (from < 3) _createDrugInfos(batch);
     await batch.commit(noResult: true);
   }
 
@@ -72,6 +74,16 @@ class DatabaseService {
       a REAL NOT NULL,
       b REAL NOT NULL,
       elongation REAL NOT NULL
+    )''');
+
+  /// 버전 3. 약마다 이어 둔 식약처 의약품 정보. 서버가 꺼져도 볼 수 있게 받은 그대로 둔다.
+  /// 공공 정보를 다시 받으면 되므로 백업에는 넣지 않는다.
+  static void _createDrugInfos(Batch batch) => batch.execute('''
+    CREATE TABLE drug_infos (
+      medication_id INTEGER PRIMARY KEY REFERENCES medications(id) ON DELETE CASCADE,
+      item_seq TEXT NOT NULL,
+      data TEXT NOT NULL,
+      fetched_at INTEGER NOT NULL
     )''');
 
   Future<void> close() async {

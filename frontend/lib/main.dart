@@ -5,10 +5,12 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'data/repositories/backup_repository.dart';
+import 'data/repositories/drug_info_repository.dart';
 import 'data/repositories/intake_repository.dart';
 import 'data/repositories/medication_repository.dart';
 import 'data/services/backup_file_service.dart';
 import 'data/services/database_service.dart';
+import 'data/services/drug_info_service.dart';
 import 'data/services/fake_pill_detector.dart';
 import 'data/services/model_bundle.dart';
 import 'data/services/photo_picker_service.dart';
@@ -49,6 +51,7 @@ class PillboxApp extends StatefulWidget {
     required this.detector,
     required this.labels,
     this.backupFiles,
+    this.drugInfo,
   });
 
   final DatabaseService database;
@@ -57,6 +60,9 @@ class PillboxApp extends StatefulWidget {
   final PillDetector detector;
   final PillLabelService labels;
   final BackupFileService? backupFiles;
+
+  /// 식약처 의약품 정보. 없으면 API_BASE_URL로 만든다.
+  final DrugInfoService? drugInfo;
 
   @override
   State<PillboxApp> createState() => _PillboxAppState();
@@ -88,6 +94,12 @@ class _PillboxAppState extends State<PillboxApp> {
         ),
         Provider(
           create: (context) => BackupRepository(context.read(), context.read()),
+        ),
+        Provider(
+          create: (_) => DrugInfoRepository(
+            widget.database,
+            widget.drugInfo ?? DrugInfoService(),
+          ),
         ),
       ],
       child: MaterialApp.router(

@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     # 보관함마다 남겨 두는 백업 리비전 수. 잘못 덮어썼을 때 맥미니에서 직접 되살린다.
     backup_revisions_kept: int = 10
 
+    # 식약처 공공데이터포털 일반 인증키(Decoding). 비어 있으면 /v1/drugs가 503 (README 3.5).
+    mfds_service_key: str = ""
+    # 캐시에 없어 식약처를 부르는 횟수를 서버 전체에서 시간당 이만큼으로 막는다.
+    drug_calls_per_hour: int = 1000
+    drug_cache_seconds: int = 24 * 3600
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

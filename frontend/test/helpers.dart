@@ -1,7 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:pillbbox/data/services/database_service.dart';
+import 'package:pillbbox/data/services/drug_info_service.dart';
 import 'package:pillbbox/data/services/fake_pill_detector.dart';
 import 'package:pillbbox/data/services/photo_picker_service.dart';
 import 'package:pillbbox/data/services/photo_storage_service.dart';
@@ -66,3 +71,68 @@ Future<void> pumpUntilFound(WidgetTester tester, Finder finder) async {
       .toList();
   throw TestFailure('찾지 못함: $finder, 화면: $texts');
 }
+
+/// 맥미니 백엔드의 `/v1/drugs`를 흉내 낸다. [requests]에 받은 주소를 남긴다.
+DrugInfoService fakeDrugInfo({List<Uri>? requests, int searchStatus = 200}) =>
+    DrugInfoService(
+      baseUrl: 'https://api.test/',
+      client: MockClient((request) async {
+        requests?.add(request.url);
+        final path = request.url.path;
+        if (path == '/v1/drugs') {
+          if (searchStatus != 200) return http.Response('{}', searchStatus);
+          final q = request.url.queryParameters['q']!;
+          final items = [
+            for (final d in fakeDrugs)
+              if (d['name']!.toString().contains(q)) d,
+          ];
+          return _json({'total': items.length, 'page': 1, 'items': items});
+        }
+        final seq = path.split('/').last;
+        final drug = fakeDrugs.where((d) => d['item_seq'] == seq).firstOrNull;
+        if (drug == null) return _json({'detail': '식약처에 없는 약입니다'}, 404);
+        return _json({
+          ...drug,
+          'chart': '흰색의 원형 정제',
+          'length_long': 8.0,
+          'length_short': 8.0,
+          'thickness': 3.2,
+          'guide': seq == '200000001'
+              ? {'efficacy': '두통, 치통에 씁니다.', 'storage': '실온에서 보관하십시오.'}
+              : null,
+        });
+      }),
+    );
+
+const fakeDrugs = [
+  {
+    'item_seq': '200000001',
+    'name': '두통약정500밀리그램',
+    'company': '가나제약',
+    'otc': '일반의약품',
+    'shape': '원형',
+    'colors': ['하양'],
+    'print_front': 'GN',
+    'has_image': false,
+  },
+  {
+    'item_seq': '200000002',
+    'name': '두통약정250밀리그램',
+    'company': '가나제약',
+    'otc': '일반의약품',
+    'has_image': false,
+  },
+  {
+    'item_seq': '200000003',
+    'name': '혈압약정',
+    'company': '다라제약',
+    'otc': '전문의약품',
+    'has_image': false,
+  },
+];
+
+http.Response _json(Object body, [int status = 200]) => http.Response.bytes(
+  utf8.encode(jsonEncode(body)),
+  status,
+  headers: {'content-type': 'application/json'},
+);
