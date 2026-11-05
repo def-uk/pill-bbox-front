@@ -74,4 +74,46 @@ void main() {
       MedicationKind.prescription,
     );
   });
+
+  test('버전 4 DB를 열면 처방에 끝낸 날 칸과 몬스터 테이블이 생긴다', () async {
+    sqfliteFfiInit();
+    final dir = await Directory.systemTemp.createTemp('pillbbox_db_test');
+    addTearDown(() => dir.delete(recursive: true));
+    final path = p.join(dir.path, 'pillbbox.db');
+    final factory = databaseFactoryFfiNoIsolate;
+
+    final v4 = await factory.openDatabase(
+      path,
+      options: OpenDatabaseOptions(
+        version: 4,
+        onCreate: (db, _) async {
+          await db.execute('''
+            CREATE TABLE prescriptions (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              start_date TEXT NOT NULL,
+              days INTEGER NOT NULL,
+              status TEXT NOT NULL DEFAULT 'active',
+              created_at INTEGER NOT NULL
+            )''');
+          await db.insert('prescriptions', {
+            'start_date': '2026-11-05',
+            'days': 28,
+            'created_at': 0,
+          });
+        },
+      ),
+    );
+    await v4.close();
+
+    final service = DatabaseService(factory: factory, path: path);
+    addTearDown(service.close);
+    final db = await service.database;
+    await db.update('prescriptions', {'ended_on': '2026-11-07'});
+    await db.insert('monsters', {
+      'prescription_id': 1,
+      'color': '하양',
+      'shape': '동글',
+    });
+    expect(await db.query('monsters'), hasLength(1));
+  });
 }

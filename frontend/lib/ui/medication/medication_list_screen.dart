@@ -47,6 +47,7 @@ class MedicationListScreen extends StatelessWidget {
                     prescription: p,
                     names: [for (final i in p.items) vm.nameOf(i.medicationId)],
                     today: vm.today,
+                    defeated: vm.defeated.contains(p.id),
                   ),
                 addPrescription,
               ],
@@ -92,20 +93,22 @@ class _PrescriptionTile extends StatelessWidget {
     required this.prescription,
     required this.names,
     required this.today,
+    required this.defeated,
   });
 
   final Prescription prescription;
   final List<String> names;
   final DateTime today;
+  final bool defeated;
 
   @override
   Widget build(BuildContext context) {
     final p = prescription;
     final state = switch (p) {
-      Prescription(status: PrescriptionStatus.active) when p.isOverOn(today) =>
-        '기간 끝남',
-      Prescription(status: PrescriptionStatus.active) => null,
-      _ => p.status.label,
+      _ when defeated => '퇴치',
+      Prescription(status: PrescriptionStatus.ended) => '끝냄',
+      _ when p.isOverOn(today) => '기간 끝남',
+      _ => null,
     };
     return ListTile(
       title: Text(

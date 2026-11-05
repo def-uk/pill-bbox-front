@@ -4,10 +4,11 @@ import '../../utils/time_format.dart';
 enum PrescriptionStatus {
   active('진행'),
 
-  /// 몬스터를 퇴치했다 (2단계).
+  /// 예전 이름. 퇴치는 기록에서 다시 세므로(utils/reward_calculator.dart) 저장하지 않는다.
+  /// 이 값으로 저장된 처방은 진행과 같게 다룬다.
   defeated('퇴치'),
 
-  /// 사용자가 처방을 끝냈다 (2단계). 일정에서 빠진다.
+  /// 사용자가 처방을 끝냈다. 끝낸 날부터 일정에서 빠진다.
   ended('끝냄');
 
   const PrescriptionStatus(this.label);
@@ -54,6 +55,7 @@ class Prescription {
     required this.days,
     required this.status,
     required this.items,
+    this.endedOn,
   });
 
   final int id;
@@ -66,6 +68,9 @@ class Prescription {
   final PrescriptionStatus status;
   final List<PrescriptionItem> items;
 
+  /// 처방을 끝낸 날 (자정). 끝내지 않았으면 null.
+  final DateTime? endedOn;
+
   /// 마지막 날 (자정).
   DateTime get endDate =>
       DateTime(startDate.year, startDate.month, startDate.day + days - 1);
@@ -75,6 +80,14 @@ class Prescription {
     if (status == PrescriptionStatus.ended) return false;
     final d = DateTime(day.year, day.month, day.day);
     return !d.isBefore(startDate) && !d.isAfter(endDate);
+  }
+
+  /// [day]의 기록이 이 몬스터 체력을 깎을 수 있는가. 처방 기간 안이고, 끝냈으면 끝낸 날까지.
+  bool countsForRewardOn(DateTime day) {
+    final d = DateTime(day.year, day.month, day.day);
+    if (d.isBefore(startDate) || d.isAfter(endDate)) return false;
+    if (status != PrescriptionStatus.ended) return true;
+    return endedOn != null && !d.isAfter(endedOn!);
   }
 
   /// 처방 기간이 [day] 전에 끝났다.

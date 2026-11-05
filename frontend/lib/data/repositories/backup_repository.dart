@@ -39,7 +39,8 @@ class BackupRepository {
   static const _medicationHeader = ['이름', '약 번호', '1회 개수', '복용 시간'];
   static const _medicationExtraHeader = ['종류', '하루 기준량'];
 
-  /// 처방 속 약 하나가 한 행이다. 같은 처방은 '처방' 번호가 같다.
+  /// 처방 속 약 하나가 한 행이다. 같은 처방은 '처방' 번호가 같다. 앞 일곱 칸의 머리글을 맞춰 보고,
+  /// 끝낸 날은 DB 버전 5에 더했다.
   static const _prescriptionHeader = [
     '처방',
     '시작일',
@@ -49,6 +50,7 @@ class BackupRepository {
     '1회 개수',
     '복용 시간',
   ];
+  static const _prescriptionExtraHeader = ['끝낸 날'];
   static const _recordHeader = ['시각', '약', '개수', '방법'];
   static const _appearanceHeader = ['약', 'L', 'a', 'b', '길쭉함'];
   static const _sources = {
@@ -88,7 +90,7 @@ class BackupRepository {
           [names[id], a.l, a.a, a.b, a.elongation],
       ],
       prescriptionSheet: [
-        _prescriptionHeader,
+        [..._prescriptionHeader, ..._prescriptionExtraHeader],
         for (final (i, p) in (await _prescriptions.getAll()).indexed)
           for (final item in p.items)
             [
@@ -99,6 +101,7 @@ class BackupRepository {
               names[item.medicationId],
               item.dosePerTake,
               item.times.map(formatMinuteOfDay).join(', '),
+              p.endedOn == null ? null : dateKey(p.endedOn!),
             ],
       ],
     });
@@ -237,6 +240,7 @@ class BackupRepository {
             DateTime startDate,
             int days,
             PrescriptionStatus status,
+            DateTime? endedOn,
             List<PrescriptionItem> items,
           })
         >{};
@@ -248,6 +252,7 @@ class BackupRepository {
       final medicationId = medicationIds[_string(row, 4)];
       final dose = _int(row, 5);
       final times = _times(_cell(row, 6));
+      final endedOn = _dateTime(_cell(row, 7));
       final group = number == null ? null : groups[number];
       if (number == null ||
           start == null ||
@@ -276,6 +281,9 @@ class BackupRepository {
           startDate: DateTime(start.year, start.month, start.day),
           days: days,
           status: status,
+          endedOn: endedOn == null
+              ? null
+              : DateTime(endedOn.year, endedOn.month, endedOn.day),
           items: [item],
         );
       } else {
@@ -295,6 +303,7 @@ class BackupRepository {
         days: p.days,
         items: p.items,
         status: p.status,
+        endedOn: p.endedOn,
       );
       added++;
     }

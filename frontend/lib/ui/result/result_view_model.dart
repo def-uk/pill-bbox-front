@@ -9,6 +9,7 @@ import '../../data/models/pill_label.dart';
 import '../../data/repositories/intake_repository.dart';
 import '../../data/repositories/medication_repository.dart';
 import '../../data/repositories/prescription_repository.dart';
+import '../../data/repositories/reward_repository.dart';
 import '../../data/services/detection_mapper.dart';
 import '../../data/services/pill_detector.dart';
 import '../../data/services/pill_label_service.dart';
@@ -16,6 +17,7 @@ import '../../data/services/platform_services.dart'
     if (dart.library.js_interop) '../../data/services/platform_services_web.dart';
 import '../../utils/intake_matcher.dart';
 import '../../utils/object_finder.dart';
+import '../../utils/reward_calculator.dart';
 
 enum ResultStatus { detecting, ready, saving, failed }
 
@@ -95,6 +97,7 @@ class ResultViewModel extends ChangeNotifier {
     required this._intakes,
     required this._labels,
     this._prescriptions,
+    this._rewards,
     Future<List<FoundObject>> Function(Uint8List photo)? objectFinder,
     DateTime Function()? now,
   }) : _findObjects = objectFinder ?? findPhotoObjects,
@@ -106,12 +109,16 @@ class ResultViewModel extends ChangeNotifier {
   final IntakeRepository _intakes;
   final PillLabelService _labels;
   final PrescriptionRepository? _prescriptions;
+  final RewardRepository? _rewards;
   final Future<List<FoundObject>> Function(Uint8List photo) _findObjects;
   final DateTime Function() _now;
   bool _disposed = false;
 
   ResultStatus status = ResultStatus.detecting;
   String? errorMessage;
+
+  /// 저장으로 바뀐 보상. 예: "몬스터 체력 -1 · 경험치 +1". 바뀐 것이 없으면 null.
+  String? rewardMessage;
   List<Detection> detections = const [];
 
   /// 모델이 알약으로 보지 않은 물체 중 아직 무엇인지 고르지 않은 것.
@@ -311,15 +318,29 @@ class ResultViewModel extends ChangeNotifier {
     status = ResultStatus.saving;
     _notify();
     try {
+      final before = await _rewardsOrNull();
       await _registerNewMedications();
       await _intakes.addCameraIntake(photo: photo, countsByMedication: _counts);
       await _saveAppearances();
+      final after = await _rewardsOrNull();
+      if (before != null && after != null) {
+        rewardMessage = describeRewardChange(before, after);
+      }
       return true;
     } catch (e) {
       status = ResultStatus.ready;
       errorMessage = '저장하지 못했습니다';
       _notify();
       return false;
+    }
+  }
+
+  /// 보상을 세지 못해도 기록 저장은 막지 않는다.
+  Future<RewardState?> _rewardsOrNull() async {
+    try {
+      return await _rewards?.current();
+    } catch (_) {
+      return null;
     }
   }
 

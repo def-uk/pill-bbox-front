@@ -9,6 +9,8 @@ import '../../data/models/medication.dart';
 import '../../data/services/photo_picker_service.dart';
 import '../../utils/intake_matcher.dart';
 import '../../utils/time_format.dart';
+import '../../utils/monster_look.dart';
+import '../../utils/reward_calculator.dart';
 import '../common/kind_picker.dart';
 import '../common/medication_picker.dart';
 import '../common/theme.dart';
@@ -39,9 +41,19 @@ class HomeScreen extends StatelessWidget {
       if (kind != null) await vm.setKind(medication, kind);
     }
 
-    final kindPrompt = vm.untyped.isEmpty
-        ? null
-        : _KindPrompt(medications: vm.untyped, onTap: chooseKind);
+    final header = [
+      if (vm.untyped.isNotEmpty)
+        _KindPrompt(medications: vm.untyped, onTap: chooseKind),
+      if (vm.activeMonsters.isNotEmpty || vm.showsExp)
+        _RewardCard(
+          monsters: vm.activeMonsters,
+          names: vm.monsterNames,
+          today: vm.today,
+          totalExp: vm.showsExp ? vm.rewards.totalExp : null,
+          todayExp: vm.todayReward?.exp ?? 0,
+          onTapMonster: (m) => context.push('/monsters/${m.prescription.id}'),
+        ),
+    ];
 
     void showResult(Uint8List? photo) {
       if (photo != null && context.mounted) {
@@ -196,7 +208,7 @@ class HomeScreen extends StatelessWidget {
       body: switch (vm) {
         HomeViewModel(loading: true) => const LoadingState(),
         HomeViewModel(isEmpty: true) => _EmptyGuide(
-          header: kindPrompt,
+          header: header,
           onTrySample: () async => showResult(await vm.loadSamplePhoto()),
           onSetSchedule: () => context.push('/medications'),
         ),
@@ -204,8 +216,8 @@ class HomeScreen extends StatelessWidget {
           // 아래 떠 있는 기록하기 버튼에 마지막 카드가 가리지 않게 비워 둔다.
           padding: pagePadding(context, bottom: 120),
           children: [
-            if (kindPrompt != null) ...[
-              kindPrompt,
+            for (final card in header) ...[
+              card,
               const SizedBox(height: AppSpacing.xl),
             ],
             for (final (i, (time, slots)) in vm.slotsByTime.indexed) ...[
@@ -458,6 +470,70 @@ class _SlotStatus extends StatelessWidget {
   }
 }
 
+/// 싸우는 중인 처방 몬스터와 경험치. 3단계에서 그림 무대로 바뀌기 전까지 숫자로만 보여 준다.
+class _RewardCard extends StatelessWidget {
+  const _RewardCard({
+    required this.monsters,
+    required this.names,
+    required this.today,
+    required this.totalExp,
+    required this.todayExp,
+    required this.onTapMonster,
+  });
+
+  final List<MonsterState> monsters;
+  final Map<int, String> names;
+  final DateTime today;
+
+  /// 경험치를 보여 주지 않으면 null.
+  final int? totalExp;
+  final int todayExp;
+  final void Function(MonsterState) onTapMonster;
+
+  @override
+  Widget build(BuildContext context) {
+    return GroupCard(
+      children: [
+        const _CardHeader(title: '처방 몬스터'),
+        for (final m in monsters)
+          _Row(
+            leading: const Icon(
+              Icons.pest_control_rounded,
+              size: 22,
+              color: AppColors.inkMuted,
+            ),
+            title: names[m.prescription.id] ?? defaultMonsterName,
+            subtitle: switch (m) {
+              _ when m.attackedOn(today) => '오늘 체력 -1 완료',
+              _ when m.prescription.isOverOn(today) => '처방 기간이 끝났어요',
+              _ => '오늘 회차를 모두 사진으로 기록하면 체력 -1',
+            },
+            trailing: Text(
+              '체력 ${m.hp} / ${m.maxHp}',
+              style: AppTypography.bodyStrong.copyWith(
+                fontFeatures: AppTypography.tabular,
+              ),
+            ),
+            onTap: () => onTapMonster(m),
+          ),
+        if (totalExp != null)
+          _Row(
+            leading: const Icon(
+              Icons.auto_awesome_rounded,
+              size: 22,
+              color: AppColors.primary,
+            ),
+            title: '경험치 $totalExp',
+            subtitle: todayExp > 0
+                ? '오늘 +$todayExp'
+                : '영양제 일정을 모두 사진으로 지키면 하루 +1',
+            trailing: const SizedBox.shrink(),
+          ),
+      ],
+    );
+  }
+}
+
 /// 업데이트 전에 등록해 종류가 없는 약. 눌러서 종류를 고른다 (docs/MVP.md 10장).
 class _KindPrompt extends StatelessWidget {
   const _KindPrompt({required this.medications, required this.onTap});
@@ -506,13 +582,13 @@ class _KindPrompt extends StatelessWidget {
 /// 오늘 기록도 일정도 없을 때(`empty-guide`). 무엇을 하면 되는지와 잘 찍는 법을 함께 보여 준다.
 class _EmptyGuide extends StatelessWidget {
   const _EmptyGuide({
-    this.header,
+    this.header = const [],
     required this.onTrySample,
     required this.onSetSchedule,
   });
 
-  /// 안내 위에 둘 카드. 종류를 고르지 않은 약이 있을 때.
-  final Widget? header;
+  /// 안내 위에 둘 카드. 종류를 고르지 않은 약, 몬스터와 경험치.
+  final List<Widget> header;
   final VoidCallback onTrySample;
   final VoidCallback onSetSchedule;
 
@@ -522,7 +598,10 @@ class _EmptyGuide extends StatelessWidget {
     return ListView(
       padding: pagePadding(context, top: AppSpacing.lg, bottom: 120),
       children: [
-        if (header != null) ...[header!, const SizedBox(height: AppSpacing.xl)],
+        for (final card in header) ...[
+          card,
+          const SizedBox(height: AppSpacing.xl),
+        ],
         Text('오늘 기록이 없습니다', style: textTheme.headlineMedium),
         const SizedBox(height: AppSpacing.xs),
         Text(
