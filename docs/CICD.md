@@ -35,18 +35,24 @@ main push ──▶ deploy-backend.yml (backend/** 바뀌면)       deploy-web.y
 
 ## 3. 검증 시나리오
 
-일부러 실패하는 PR과 배포를 만들어, 막아야 할 때 막는지 봅니다. 결과에는 Actions 실행 링크를 붙입니다.
+일부러 실패하는 PR과 배포를 만들어, 막아야 할 때 막는지 봅니다. 결과에는 Actions 실행 링크를 붙입니다. 1~4번 PR은 확인한 뒤 머지하지 않고 닫았습니다.
 
 | # | 시나리오 | 기대 | 결과 |
 |---|---|---|---|
-| 1 | 백엔드 테스트를 깨뜨린 PR | `backend-check` 빨간불, 머지 잠김 | |
-| 2 | 린트 위반 PR (줄 길이) | `backend-check` 빨간불, 머지 잠김 | |
-| 3 | Flutter 빌드를 깨뜨린 PR | `web-build` 빨간불, 머지 잠김 | |
-| 4 | 문서만 바꾼 PR | 두 체크 모두 건너뛰고 통과, 머지 가능 | |
-| 5 | 정상 머지 | 배포 후 바깥 확인 통과 | |
-| 6 | 앱이 뜨지 않는 커밋 배포 | 배포 빨간불, `/health`가 직전 커밋 (롤백) | |
+| 1 | 백엔드 테스트를 깨뜨린 PR | `backend-check` 빨간불, 머지 잠김 | 통과 (2026-11-04). [#23](https://github.com/def-uk/pill-bbox-front/pull/23): `assert 1 == 2` 테스트 추가 → pytest `1 failed, 31 passed`로 [`backend-check` 실패](https://github.com/def-uk/pill-bbox-front/actions/runs/41845579373), 머지 상태 `BLOCKED` |
+| 2 | 린트 위반 PR (줄 길이) | `backend-check` 빨간불, 머지 잠김 | 통과 (2026-11-04). [#24](https://github.com/def-uk/pill-bbox-front/pull/24): 185자 주석 줄 추가 → ruff `E501 Line too long (185 > 100)`으로 [`backend-check` 실패](https://github.com/def-uk/pill-bbox-front/actions/runs/41845596462), 머지 상태 `BLOCKED` |
+| 3 | Flutter 빌드를 깨뜨린 PR | `web-build` 빨간불, 머지 잠김 | 통과 (2026-11-04). [#25](https://github.com/def-uk/pill-bbox-front/pull/25): `const int ciProbe = 'not an int';` 추가 → `flutter build web`이 타입 오류로 [`web-build` 실패](https://github.com/def-uk/pill-bbox-front/actions/runs/41845609684), 머지 상태 `BLOCKED`. `backend-check`는 건너뜀 |
+| 4 | 문서만 바꾼 PR | 두 체크 모두 건너뛰고 통과, 머지 가능 | 통과 (2026-11-04). [#26](https://github.com/def-uk/pill-bbox-front/pull/26): `docs/CICD.md`만 바꿈 → [`backend-check`](https://github.com/def-uk/pill-bbox-front/actions/runs/41845625809), [`web-build`](https://github.com/def-uk/pill-bbox-front/actions/runs/41845625816) 둘 다 건너뜀, 머지 상태 `CLEAN` |
+| 5 | 정상 머지 | 배포 후 바깥 확인 통과 | 통과 (2026-11-04). [#22](https://github.com/def-uk/pill-bbox-front/pull/22) 머지(`a6ef2bd`) 뒤 [API](https://github.com/def-uk/pill-bbox-front/actions/runs/41827329216) `/health`가 `a6ef2bd`, [웹](https://github.com/def-uk/pill-bbox-front/actions/runs/41827329269) `commit.txt`가 `a6ef2bd`이고 COOP/COEP 있음. 둘 다 첫 시도에 통과 |
+| 6 | 앱이 뜨지 않는 커밋 배포 | 배포 빨간불, `/health`가 직전 커밋 (롤백) | 아직 안 함 |
 
 6번은 실제 서버가 20초쯤 멈추므로 사람이 적은 시간에 합니다.
+
+검증하면서 본 빈 곳입니다. 아직 고치지 않았습니다.
+
+- PR 검사는 Flutter를 `flutter build web`으로만 봅니다. `flutter analyze`와 `flutter test`는 CI에서 돌지 않아서, 빌드는 되지만 테스트가 깨진 PR은 막지 못합니다.
+- 웹 배포는 `current`를 새 빌드로 바꾼 뒤에 확인합니다. 확인이 실패하면 워크플로는 빨간불이지만 사이트는 새 빌드를 계속 내보냅니다. 되돌리려면 `current`를 이전 `releases/` 폴더로 손으로 바꿔야 합니다.
+- 백엔드는 맥미니 안의 `/health` 확인이 실패할 때만 롤백합니다. 바깥 확인(`smoke.sh`)만 실패하면 롤백하지 않습니다.
 
 바깥 확인은 손으로도 돌릴 수 있습니다.
 
