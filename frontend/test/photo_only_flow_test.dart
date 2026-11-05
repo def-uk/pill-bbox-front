@@ -40,11 +40,24 @@ void main() {
 
     expect(picker.sources, [PhotoSource.camera]);
 
+    // 처음 기록하는 약마다 종류를 고른다.
+    expect(find.text('종류 고르기'), findsNWidgets(3));
+    for (var i = 0; i < 3; i++) {
+      await tester.ensureVisible(find.text('종류 고르기').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('종류 고르기').first);
+      await pumpUntilFound(tester, find.text('필요할 때 먹는 약'));
+      await tester.tap(find.text('영양제'));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('종류 · 영양제'), findsNWidgets(3));
+
     await tester.tap(find.text('저장'));
     await pumpUntilFound(tester, find.text('복용 기록을 저장했습니다'));
 
     await pumpUntilFound(tester, find.text('오늘 기록'));
     expect(find.text('샘플약 A (흰색)'), findsOneWidget);
     expect(find.text('2정'), findsOneWidget);
+    expect(find.text('약 종류를 골라 주세요'), findsNothing);
   });
 }

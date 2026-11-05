@@ -36,6 +36,15 @@ void main() {
     await pumpUntilFound(tester, find.text('샘플약 A (흰색)'));
     await tester.tap(find.text('샘플약 A (흰색)'));
     await pumpUntilFound(tester, find.text('사진으로 인식되는 약'));
+    // 종류를 고르기 전에는 저장할 수 없다.
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '저장'))
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.text('영양제'));
+    await pumpUntilFound(tester, find.text('하루 권장량'));
     await tester.tap(find.byTooltip('1정 늘리기'));
     await tester.tap(find.text('시간 추가'));
     await pumpUntilFound(tester, find.text('확인'));
@@ -44,7 +53,7 @@ void main() {
     await tester.tap(find.text('저장'));
 
     // 약 관리 → 홈
-    await pumpUntilFound(tester, find.text('1회 2정 · 08:00'));
+    await pumpUntilFound(tester, find.text('영양제 · 1회 2정 · 08:00'));
     await tester.tap(find.byType(BackButton));
 
     // 홈: 08:00에 A 2정 예정

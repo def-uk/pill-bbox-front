@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -16,6 +17,8 @@ import 'medication/medication_edit_screen.dart';
 import 'medication/medication_edit_view_model.dart';
 import 'medication/medication_list_screen.dart';
 import 'medication/medication_list_view_model.dart';
+import 'medication/prescription_edit_screen.dart';
+import 'medication/prescription_edit_view_model.dart';
 import 'result/result_screen.dart';
 import 'result/result_view_model.dart';
 
@@ -27,6 +30,7 @@ GoRouter buildRouter() => GoRouter(
         create: (context) => HomeViewModel(
           intakes: context.read(),
           medications: context.read(),
+          prescriptions: context.read(),
           picker: context.read(),
           backup: context.read(),
           backupFiles: context.read(),
@@ -45,6 +49,7 @@ GoRouter buildRouter() => GoRouter(
           medications: context.read(),
           intakes: context.read(),
           labels: context.read(),
+          prescriptions: context.read(),
         )..detect(),
         child: const ResultScreen(),
       ),
@@ -52,11 +57,26 @@ GoRouter buildRouter() => GoRouter(
     GoRoute(
       path: '/medications',
       builder: (context, state) => ChangeNotifierProvider(
-        create: (context) =>
-            MedicationListViewModel(medications: context.read())..load(),
+        create: (context) => MedicationListViewModel(
+          medications: context.read(),
+          prescriptions: context.read(),
+        )..load(),
         child: const MedicationListScreen(),
       ),
       routes: [
+        GoRoute(
+          path: 'prescriptions/new',
+          builder: (context, state) => _prescriptionEdit(null),
+        ),
+        GoRoute(
+          path: 'prescriptions/:pid',
+          redirect: (context, state) =>
+              int.tryParse(state.pathParameters['pid']!) == null
+              ? '/medications'
+              : null,
+          builder: (context, state) =>
+              _prescriptionEdit(int.parse(state.pathParameters['pid']!)),
+        ),
         GoRoute(
           path: 'new',
           builder: (context, state) => ChangeNotifierProvider(
@@ -128,4 +148,15 @@ GoRouter buildRouter() => GoRouter(
       ],
     ),
   ],
+);
+
+Widget _prescriptionEdit(int? id) => ChangeNotifierProvider(
+  create: (context) => PrescriptionEditViewModel(
+    prescriptions: context.read(),
+    medications: context.read(),
+    labels: context.read(),
+    drugs: context.read(),
+    prescriptionId: id,
+  )..load(),
+  child: const PrescriptionEditScreen(),
 );

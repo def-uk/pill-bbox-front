@@ -18,7 +18,7 @@ class DatabaseService {
     return _factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 3,
+        version: 4,
         onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
         onCreate: _create,
         onUpgrade: _upgrade,
@@ -33,7 +33,9 @@ class DatabaseService {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           category_id INTEGER UNIQUE,
           name TEXT NOT NULL,
-          dose_per_take INTEGER NOT NULL DEFAULT 1
+          dose_per_take INTEGER NOT NULL DEFAULT 1,
+          kind TEXT,
+          daily_limit INTEGER
         )''')
       ..execute('''
         CREATE TABLE schedules (
@@ -55,6 +57,7 @@ class DatabaseService {
       );
     _createAppearances(batch);
     _createDrugInfos(batch);
+    _createPrescriptions(batch);
     await batch.commit(noResult: true);
   }
 
@@ -62,6 +65,12 @@ class DatabaseService {
     final batch = db.batch();
     if (from < 2) _createAppearances(batch);
     if (from < 3) _createDrugInfos(batch);
+    if (from < 4) {
+      batch
+        ..execute('ALTER TABLE medications ADD COLUMN kind TEXT')
+        ..execute('ALTER TABLE medications ADD COLUMN daily_limit INTEGER');
+      _createPrescriptions(batch);
+    }
     await batch.commit(noResult: true);
   }
 
@@ -85,6 +94,26 @@ class DatabaseService {
       data TEXT NOT NULL,
       fetched_at INTEGER NOT NULL
     )''');
+
+  /// 버전 4. 처방(병원에서 한 번에 받은 약 묶음)과 처방 속 약 (docs/MVP.md 4.3).
+  /// 약 종류(medications.kind)와 영양제 하루 권장량(medications.daily_limit)도 이때 더했다.
+  static void _createPrescriptions(Batch batch) => batch
+    ..execute('''
+      CREATE TABLE prescriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        start_date TEXT NOT NULL,
+        days INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at INTEGER NOT NULL
+      )''')
+    ..execute('''
+      CREATE TABLE prescription_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        prescription_id INTEGER NOT NULL REFERENCES prescriptions(id) ON DELETE CASCADE,
+        medication_id INTEGER NOT NULL REFERENCES medications(id) ON DELETE CASCADE,
+        dose_per_take INTEGER NOT NULL,
+        times TEXT NOT NULL
+      )''');
 
   Future<void> close() async {
     final database = _database;

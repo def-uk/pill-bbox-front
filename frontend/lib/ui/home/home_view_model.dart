@@ -7,6 +7,7 @@ import '../../data/models/medication.dart';
 import '../../data/repositories/backup_repository.dart';
 import '../../data/repositories/intake_repository.dart';
 import '../../data/repositories/medication_repository.dart';
+import '../../data/repositories/prescription_repository.dart';
 import '../../data/services/backup_file_service.dart';
 import '../../data/services/photo_picker_service.dart';
 import '../../utils/intake_matcher.dart';
@@ -16,6 +17,7 @@ class HomeViewModel extends ChangeNotifier {
   HomeViewModel({
     required this._intakes,
     required this._medications,
+    required this._prescriptions,
     required this._picker,
     required this._backup,
     required this._backupFiles,
@@ -23,10 +25,12 @@ class HomeViewModel extends ChangeNotifier {
   }) : _now = now ?? DateTime.now {
     _intakes.addListener(load);
     _medications.addListener(load);
+    _prescriptions.addListener(load);
   }
 
   final IntakeRepository _intakes;
   final MedicationRepository _medications;
+  final PrescriptionRepository _prescriptions;
   final PhotoPickerService _picker;
   final BackupRepository _backup;
   final BackupFileService _backupFiles;
@@ -62,6 +66,15 @@ class HomeViewModel extends ChangeNotifier {
     return open.isEmpty ? null : nearestTime(open, minuteOfDay(_now()));
   }
 
+  /// 종류를 아직 고르지 않은 약. 업데이트 전에 등록한 약이다. 홈에서 고르게 한다.
+  List<Medication> get untyped => [
+    for (final m in medications)
+      if (m.kind == null) m,
+  ];
+
+  /// 오늘 일정도 기록도 없다.
+  bool get isEmpty => summary.slots.isEmpty && summary.unscheduled.isEmpty;
+
   String nameOf(int medicationId) =>
       medications.where((m) => m.id == medicationId).firstOrNull?.name ??
       '알 수 없는 약';
@@ -70,13 +83,22 @@ class HomeViewModel extends ChangeNotifier {
     final now = _now();
     final medications = await _medications.getAll();
     final records = await _intakes.recordsOn(now);
+    final prescriptions = await _prescriptions.scheduledOn(now);
     if (_disposed) return;
     today = now;
     this.medications = medications;
-    summary = summarizeDay(medications, records);
+    summary = summarizeDay(medications, records, prescriptions: prescriptions);
     loading = false;
     notifyListeners();
   }
+
+  /// 종류를 고르지 않은 약의 종류를 정한다.
+  Future<void> setKind(Medication medication, MedicationKind kind) =>
+      _medications.setKind(
+        [medication.id],
+        kind,
+        dailyLimit: medication.dosePerTake * max(1, medication.times.length),
+      );
 
   /// 남은 개수만큼 직접 복용 기록을 남긴다.
   Future<void> markTaken(DoseSlot slot) => _intakes.addManualIntake(
@@ -133,6 +155,7 @@ class HomeViewModel extends ChangeNotifier {
     _disposed = true;
     _intakes.removeListener(load);
     _medications.removeListener(load);
+    _prescriptions.removeListener(load);
     super.dispose();
   }
 }

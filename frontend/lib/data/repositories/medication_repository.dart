@@ -38,19 +38,25 @@ class MedicationRepository extends ChangeNotifier {
     return Medication.fromMap(rows.single, times: times[id] ?? const []);
   }
 
-  /// 약을 등록하거나([id]가 null) 고친다. 복용 시간은 통째로 바꾼다. 약 id를 돌려준다.
+  /// 약을 등록하거나([id]가 null) 고친다. 복용 시간·종류·하루 권장량도 통째로 바꾼다. 약 id를 돌려준다.
+  ///
+  /// [dailyLimit]는 영양제일 때만 남긴다.
   Future<int> save({
     int? id,
     required int? categoryId,
     required String name,
     required int dosePerTake,
     required List<int> times,
+    MedicationKind? kind,
+    int? dailyLimit,
   }) async {
     final db = await _db.database;
     final values = {
       'category_id': categoryId,
       'name': name,
       'dose_per_take': dosePerTake,
+      'kind': kind?.name,
+      'daily_limit': kind == MedicationKind.supplement ? dailyLimit : null,
     };
     final savedId = await db.transaction((txn) async {
       final medicationId = id ?? await txn.insert('medications', values);
@@ -77,6 +83,26 @@ class MedicationRepository extends ChangeNotifier {
     });
     notifyListeners();
     return savedId;
+  }
+
+  /// 약 [ids]의 종류만 바꾼다. 영양제가 아니게 되면 하루 권장량은 지운다.
+  Future<void> setKind(
+    Iterable<int> ids,
+    MedicationKind kind, {
+    int? dailyLimit,
+  }) async {
+    if (ids.isEmpty) return;
+    final db = await _db.database;
+    await db.update(
+      'medications',
+      {
+        'kind': kind.name,
+        'daily_limit': kind == MedicationKind.supplement ? dailyLimit : null,
+      },
+      where: 'id IN (${List.filled(ids.length, '?').join(',')})',
+      whereArgs: [...ids],
+    );
+    notifyListeners();
   }
 
   /// [medicationId] 약으로 기록한 알약의 색·모양을 남긴다. 약마다 최근 [appearancesPerMedication]개만 둔다.
@@ -108,7 +134,8 @@ class MedicationRepository extends ChangeNotifier {
     ];
   }
 
-  /// 약을 지운다. 일정과 복용 기록도 함께 지워지고, 더 쓰이지 않는 사진도 지운다.
+  /// 약을 지운다. 일정, 복용 기록, 처방 속 그 약도 함께 지워지고, 더 쓰이지 않는 사진과
+  /// 약이 하나도 남지 않은 처방도 지운다.
   Future<void> delete(int id) async {
     final db = await _db.database;
     final unused = await db.transaction((txn) async {
@@ -119,6 +146,10 @@ class MedicationRepository extends ChangeNotifier {
         whereArgs: [id],
       );
       await txn.delete('medications', where: 'id = ?', whereArgs: [id]);
+      await txn.delete(
+        'prescriptions',
+        where: 'id NOT IN (SELECT prescription_id FROM prescription_items)',
+      );
       return unusedPhotoPaths(txn, {
         for (final r in rows) r['photo_path']! as String,
       });

@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pillbbox/data/models/medication.dart';
 import 'package:pillbbox/data/repositories/intake_repository.dart';
 import 'package:pillbbox/data/repositories/medication_repository.dart';
 import 'package:pillbbox/data/services/database_service.dart';
@@ -96,5 +97,48 @@ void main() {
     expect(photos.photos.keys, [
       records.single.photoPath,
     ], reason: 'B 기록이 쓰는 사진만 남는다');
+  });
+
+  test('종류와 영양제 하루 권장량을 저장하고, 영양제가 아니면 권장량을 남기지 않는다', () async {
+    final vitamin = await medications.save(
+      categoryId: null,
+      name: '비타민 D',
+      dosePerTake: 1,
+      times: const [],
+      kind: MedicationKind.supplement,
+      dailyLimit: 2,
+    );
+    final painkiller = await medications.save(
+      categoryId: null,
+      name: '진통제',
+      dosePerTake: 1,
+      times: const [],
+      kind: MedicationKind.asNeeded,
+      dailyLimit: 3,
+    );
+    final old = await medications.save(
+      categoryId: null,
+      name: '예전 약',
+      dosePerTake: 1,
+      times: const [],
+    );
+
+    Future<(MedicationKind?, int?)> kindOf(int id) async {
+      final m = (await medications.getById(id))!;
+      return (m.kind, m.dailyLimit);
+    }
+
+    expect(await kindOf(vitamin), (MedicationKind.supplement, 2));
+    expect(await kindOf(painkiller), (MedicationKind.asNeeded, null));
+    expect(await kindOf(old), (null, null));
+
+    var notified = 0;
+    medications.addListener(() => notified++);
+    await medications.setKind([old, vitamin], MedicationKind.prescription);
+    expect(await kindOf(old), (MedicationKind.prescription, null));
+    expect(await kindOf(vitamin), (MedicationKind.prescription, null));
+    await medications.setKind([old], MedicationKind.supplement, dailyLimit: 4);
+    expect(await kindOf(old), (MedicationKind.supplement, 4));
+    expect(notified, 2);
   });
 }
