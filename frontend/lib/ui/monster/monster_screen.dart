@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../utils/reward_calculator.dart';
 import '../../utils/time_format.dart';
+import '../common/creature_art.dart';
 import '../common/medication_picker.dart';
+import '../common/stage_widgets.dart';
 import '../common/theme.dart';
 import '../common/widgets.dart';
 import 'monster_view_model.dart';
@@ -39,6 +41,15 @@ class MonsterScreen extends StatelessWidget {
         MonsterViewModel(monster: final m?) => ListView(
           padding: pagePadding(context, top: AppSpacing.lg),
           children: [
+            Center(
+              child: MonsterArt(
+                body: monsterBodyOf(m.prescription.id, vm.look),
+                color: monsterColor(vm.look?.color),
+                size: 140,
+                defeated: !m.isActive,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
             Text(vm.name, style: textTheme.headlineMedium),
             const SizedBox(height: AppSpacing.xxs),
             Text(
@@ -68,15 +79,7 @@ class MonsterScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: AppSpacing.xs),
-            ClipRRect(
-              borderRadius: const BorderRadius.all(
-                Radius.circular(AppRadius.sm),
-              ),
-              child: LinearProgressIndicator(
-                value: m.maxHp == 0 ? 0 : m.hp / m.maxHp,
-                minHeight: 8,
-              ),
-            ),
+            MeterBar(value: m.maxHp == 0 ? 0 : m.hp / m.maxHp, color: hpColor),
             const SizedBox(height: AppSpacing.xs),
             Text(
               '${formatDate(m.prescription.startDate)} ~ '

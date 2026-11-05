@@ -4,6 +4,8 @@ import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../utils/monster_look.dart';
+import '../utils/reward_calculator.dart';
 import '../utils/time_format.dart';
 import 'history/history_day_screen.dart';
 import 'history/history_day_view_model.dart';
@@ -23,6 +25,7 @@ import 'monster/monster_screen.dart';
 import 'monster/monster_view_model.dart';
 import 'result/result_screen.dart';
 import 'result/result_view_model.dart';
+import 'reward/reward_screen.dart';
 
 GoRouter buildRouter() => GoRouter(
   routes: [
@@ -57,6 +60,17 @@ GoRouter buildRouter() => GoRouter(
         )..detect(),
         child: const ResultScreen(),
       ),
+    ),
+    GoRoute(
+      path: '/reward',
+      // 보상 결과는 저장 직후에만 메모리로 넘긴다. 그냥 들어오면 홈으로.
+      redirect: (context, state) =>
+          state.extra is (RewardOutcome, Map<int, MonsterLook?>) ? null : '/',
+      builder: (context, state) {
+        final (outcome, looks) =
+            state.extra! as (RewardOutcome, Map<int, MonsterLook?>);
+        return RewardScreen(outcome: outcome, looks: looks);
+      },
     ),
     GoRoute(
       path: '/medications',

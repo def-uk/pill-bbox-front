@@ -278,28 +278,33 @@ void main() {
     expect(state.totalExp, 3);
   });
 
-  test('저장 전후로 바뀐 보상을 한 줄로 알린다', () {
+  test('저장 전후로 체력이 준 몬스터와 경험치 변화를 비교한다', () {
     final before = calc([rec(1, 1, 8)]);
     final after = calc([rec(1, 1, 8), rec(1, 1, 20)]);
-    expect(describeRewardChange(before, after), '몬스터 체력 -1');
-    expect(describeRewardChange(after, after), isNull);
+    final outcome = compareRewards(before, after)!;
+    expect(
+      [for (final m in outcome.monsters) (m.before.hp, m.after.hp)],
+      [(28, 27)],
+    );
+    expect(outcome.expGained, 0);
+    expect(compareRewards(after, after), isNull);
 
     final vitamin = med(2, MedicationKind.supplement, times: [8 * 60]);
-    final both = calc(
-      [rec(1, 1, 8), rec(1, 1, 20), rec(2, 1, 8)],
-      medications: [x, vitamin],
-    );
-    expect(describeRewardChange(before, both), '몬스터 체력 -1 · 경험치 +1');
+    final supplementOnly = compareRewards(
+      calc(const [], medications: [vitamin], prescriptions: []),
+      calc([rec(2, 1, 8)], medications: [vitamin], prescriptions: []),
+    )!;
+    expect(supplementOnly.monsters, isEmpty);
+    expect((supplementOnly.expBefore, supplementOnly.expAfter), (0, 1));
 
     final short = rx(10, [
       item(1, [8]),
     ], days: 1);
-    expect(
-      describeRewardChange(
-        calc(const [], prescriptions: [short]),
-        calc([rec(1, 1, 8)], prescriptions: [short]),
-      ),
-      '몬스터 퇴치! · 경험치 +3',
-    );
+    final defeat = compareRewards(
+      calc(const [], prescriptions: [short]),
+      calc([rec(1, 1, 8)], prescriptions: [short]),
+    )!;
+    expect(defeat.monsters.single.after.isDefeated, isTrue);
+    expect(defeat.expGained, defeatExp);
   });
 }

@@ -9,10 +9,9 @@ import '../../data/models/medication.dart';
 import '../../data/services/photo_picker_service.dart';
 import '../../utils/intake_matcher.dart';
 import '../../utils/time_format.dart';
-import '../../utils/monster_look.dart';
-import '../../utils/reward_calculator.dart';
 import '../common/kind_picker.dart';
 import '../common/medication_picker.dart';
+import '../common/stage_widgets.dart';
 import '../common/theme.dart';
 import '../common/widgets.dart';
 import 'home_view_model.dart';
@@ -42,17 +41,15 @@ class HomeScreen extends StatelessWidget {
     }
 
     final header = [
+      StageCard(
+        growth: vm.growth,
+        monsters: vm.activeMonsters,
+        looks: vm.monsterLooks,
+        today: vm.today,
+        onTapMonster: (m) => context.push('/monsters/${m.prescription.id}'),
+      ),
       if (vm.untyped.isNotEmpty)
         _KindPrompt(medications: vm.untyped, onTap: chooseKind),
-      if (vm.activeMonsters.isNotEmpty || vm.showsExp)
-        _RewardCard(
-          monsters: vm.activeMonsters,
-          names: vm.monsterNames,
-          today: vm.today,
-          totalExp: vm.showsExp ? vm.rewards.totalExp : null,
-          todayExp: vm.todayReward?.exp ?? 0,
-          onTapMonster: (m) => context.push('/monsters/${m.prescription.id}'),
-        ),
     ];
 
     void showResult(Uint8List? photo) {
@@ -466,70 +463,6 @@ class _SlotStatus extends StatelessWidget {
         fontWeight: slot.isDone ? FontWeight.w600 : null,
         fontFeatures: AppTypography.tabular,
       ),
-    );
-  }
-}
-
-/// 싸우는 중인 처방 몬스터와 경험치. 3단계에서 그림 무대로 바뀌기 전까지 숫자로만 보여 준다.
-class _RewardCard extends StatelessWidget {
-  const _RewardCard({
-    required this.monsters,
-    required this.names,
-    required this.today,
-    required this.totalExp,
-    required this.todayExp,
-    required this.onTapMonster,
-  });
-
-  final List<MonsterState> monsters;
-  final Map<int, String> names;
-  final DateTime today;
-
-  /// 경험치를 보여 주지 않으면 null.
-  final int? totalExp;
-  final int todayExp;
-  final void Function(MonsterState) onTapMonster;
-
-  @override
-  Widget build(BuildContext context) {
-    return GroupCard(
-      children: [
-        const _CardHeader(title: '처방 몬스터'),
-        for (final m in monsters)
-          _Row(
-            leading: const Icon(
-              Icons.pest_control_rounded,
-              size: 22,
-              color: AppColors.inkMuted,
-            ),
-            title: names[m.prescription.id] ?? defaultMonsterName,
-            subtitle: switch (m) {
-              _ when m.attackedOn(today) => '오늘 체력 -1 완료',
-              _ when m.prescription.isOverOn(today) => '처방 기간이 끝났어요',
-              _ => '오늘 회차를 모두 사진으로 기록하면 체력 -1',
-            },
-            trailing: Text(
-              '체력 ${m.hp} / ${m.maxHp}',
-              style: AppTypography.bodyStrong.copyWith(
-                fontFeatures: AppTypography.tabular,
-              ),
-            ),
-            onTap: () => onTapMonster(m),
-          ),
-        if (totalExp != null)
-          _Row(
-            leading: const Icon(
-              Icons.auto_awesome_rounded,
-              size: 22,
-              color: AppColors.primary,
-            ),
-            title: '경험치 $totalExp',
-            subtitle: todayExp > 0
-                ? '오늘 +$todayExp'
-                : '영양제 일정을 모두 사진으로 지키면 하루 +1',
-            trailing: const SizedBox.shrink(),
-          ),
-      ],
     );
   }
 }

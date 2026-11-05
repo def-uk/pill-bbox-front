@@ -53,7 +53,7 @@ void main() {
     expect(find.text('종류 · 영양제'), findsNWidgets(3));
 
     await tester.tap(find.text('저장'));
-    await pumpUntilFound(tester, find.textContaining('복용 기록을 저장했습니다'));
+    await pumpUntilFound(tester, find.textContaining('복용 기록을 저장'));
 
     await pumpUntilFound(tester, find.text('오늘 기록'));
     expect(find.text('샘플약 A (흰색)'), findsOneWidget);

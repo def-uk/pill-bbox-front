@@ -11,7 +11,9 @@ import '../../data/repositories/prescription_repository.dart';
 import '../../data/repositories/reward_repository.dart';
 import '../../data/services/backup_file_service.dart';
 import '../../data/services/photo_picker_service.dart';
+import '../../utils/character.dart';
 import '../../utils/intake_matcher.dart';
+import '../../utils/monster_look.dart';
 import '../../utils/reward_calculator.dart';
 import '../../utils/time_format.dart';
 
@@ -53,26 +55,16 @@ class HomeViewModel extends ChangeNotifier {
   DaySummary summary = const DaySummary(slots: [], unscheduled: []);
   RewardState rewards = RewardState.empty;
 
-  /// 몬스터 이름. prescription_id → 이름.
-  Map<int, String> monsterNames = const {};
+  /// 몬스터 생김새. prescription_id → 생김새(모르면 null).
+  Map<int, MonsterLook?> monsterLooks = const {};
+
+  Growth get growth => Growth(rewards.totalExp);
 
   /// 싸우는 중인 몬스터. 먼저 등록한 처방부터.
   List<MonsterState> get activeMonsters => [
     for (final m in rewards.monsters)
       if (m.isActive) m,
   ];
-
-  /// 오늘 받은 보상. 없으면 null.
-  DayReward? get todayReward => rewards.on(today);
-
-  /// 경험치를 받을 수 있는 약(영양제·처방약)이 있거나 이미 받은 적이 있다.
-  bool get showsExp =>
-      rewards.totalExp > 0 ||
-      medications.any(
-        (m) =>
-            m.kind == MedicationKind.supplement ||
-            m.kind == MedicationKind.prescription,
-      );
 
   /// 시간대별 일정. 시간순.
   List<(int, List<DoseSlot>)> get slotsByTime {
@@ -111,7 +103,7 @@ class HomeViewModel extends ChangeNotifier {
     final records = await _intakes.recordsOn(now);
     final prescriptions = await _prescriptions.scheduledOn(now);
     final rewards = await _rewards.current();
-    final names = await _rewards.monsterNames([
+    final looks = await _rewards.monsterLooks([
       for (final m in rewards.monsters)
         if (m.isActive) m.prescription,
     ]);
@@ -119,7 +111,7 @@ class HomeViewModel extends ChangeNotifier {
     today = now;
     this.medications = medications;
     this.rewards = rewards;
-    monsterNames = names;
+    monsterLooks = looks;
     summary = summarizeDay(medications, records, prescriptions: prescriptions);
     loading = false;
     notifyListeners();

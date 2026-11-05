@@ -16,6 +16,7 @@ import '../../data/services/pill_label_service.dart';
 import '../../data/services/platform_services.dart'
     if (dart.library.js_interop) '../../data/services/platform_services_web.dart';
 import '../../utils/intake_matcher.dart';
+import '../../utils/monster_look.dart';
 import '../../utils/object_finder.dart';
 import '../../utils/reward_calculator.dart';
 
@@ -117,8 +118,11 @@ class ResultViewModel extends ChangeNotifier {
   ResultStatus status = ResultStatus.detecting;
   String? errorMessage;
 
-  /// 저장으로 바뀐 보상. 예: "몬스터 체력 -1 · 경험치 +1". 바뀐 것이 없으면 null.
-  String? rewardMessage;
+  /// 저장으로 바뀐 보상. 보상 결과 화면에 보여 준다. 바뀐 것이 없으면 null.
+  RewardOutcome? rewardOutcome;
+
+  /// [rewardOutcome] 속 몬스터의 생김새.
+  Map<int, MonsterLook?> outcomeLooks = const {};
   List<Detection> detections = const [];
 
   /// 모델이 알약으로 보지 않은 물체 중 아직 무엇인지 고르지 않은 것.
@@ -324,7 +328,16 @@ class ResultViewModel extends ChangeNotifier {
       await _saveAppearances();
       final after = await _rewardsOrNull();
       if (before != null && after != null) {
-        rewardMessage = describeRewardChange(before, after);
+        rewardOutcome = compareRewards(before, after);
+        try {
+          outcomeLooks =
+              await _rewards?.monsterLooks([
+                for (final m
+                    in rewardOutcome?.monsters ?? const <MonsterChange>[])
+                  m.after.prescription,
+              ]) ??
+              const {};
+        } catch (_) {}
       }
       return true;
     } catch (e) {
