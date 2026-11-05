@@ -11,6 +11,8 @@ import 'collection/collection_screen.dart';
 import 'collection/collection_view_model.dart';
 import 'collection/draw_screen.dart';
 import 'collection/draw_view_model.dart';
+import 'collection/share_card.dart';
+import 'collection/share_card_screen.dart';
 import 'history/history_day_screen.dart';
 import 'history/history_day_view_model.dart';
 import 'history/history_screen.dart';
@@ -75,6 +77,14 @@ GoRouter buildRouter() => GoRouter(
         )..load(),
         child: const CollectionScreen(),
       ),
+    ),
+    GoRoute(
+      path: '/share',
+      // 카드에 넣을 것은 컬렉션 화면에서 메모리로만 넘긴다. 그냥 들어오면 컬렉션으로.
+      redirect: (context, state) =>
+          state.extra is ShareCardData ? null : '/collection',
+      builder: (context, state) =>
+          ShareCardScreen(data: state.extra! as ShareCardData),
     ),
     GoRoute(
       path: '/draw',

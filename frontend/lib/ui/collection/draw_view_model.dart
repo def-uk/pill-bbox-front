@@ -28,6 +28,9 @@ class DrawViewModel extends ChangeNotifier {
   /// 방금 뽑은 것과 그것이 몇 개째인지. 아직 안 뽑았으면 null.
   ({Cosmetic cosmetic, int count})? result;
 
+  /// 뽑은 횟수. 뽑을 때마다 연출을 처음부터 다시 보여 주는 데 쓴다.
+  int drawSerial = 0;
+
   /// 다음 뽑기권까지 남은 연속 일수.
   int get daysToNextTicket => ticketStreakDays - streak % ticketStreakDays;
 
@@ -53,6 +56,7 @@ class DrawViewModel extends ChangeNotifier {
           .firstWhere((o) => o.cosmetic.id == cosmetic.id)
           .count;
       result = (cosmetic: cosmetic, count: count);
+      drawSerial++;
       tickets = await _collection.availableTickets();
     } on NoTicketException {
       tickets = 0;

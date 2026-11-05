@@ -10,6 +10,7 @@ import '../common/creature_art.dart';
 import '../common/theme.dart';
 import '../common/widgets.dart';
 import 'collection_view_model.dart';
+import 'share_card.dart';
 
 class CollectionScreen extends StatelessWidget {
   const CollectionScreen({super.key});
@@ -26,6 +27,26 @@ class CollectionScreen extends StatelessWidget {
           TextButton(
             onPressed: () => context.push('/draw'),
             child: const Text('뽑기'),
+          ),
+          IconButton(
+            tooltip: '공유 카드',
+            onPressed: vm.loading
+                ? null
+                : () => context.push(
+                    '/share',
+                    extra: ShareCardData(
+                      exp: vm.growth.exp,
+                      skin: vm.equipment.skin,
+                      accessory: vm.equipment.accessory,
+                      pet: vm.pet == null
+                          ? null
+                          : (
+                              vm.pet!.prescription.id,
+                              vm.looks[vm.pet!.prescription.id],
+                            ),
+                    ),
+                  ),
+            icon: const Icon(Icons.ios_share_rounded),
           ),
         ],
       ),
