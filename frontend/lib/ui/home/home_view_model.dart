@@ -8,9 +8,11 @@ import '../../data/repositories/backup_repository.dart';
 import '../../data/repositories/intake_repository.dart';
 import '../../data/repositories/medication_repository.dart';
 import '../../data/repositories/prescription_repository.dart';
+import '../../data/repositories/reward_repository.dart';
 import '../../data/services/backup_file_service.dart';
 import '../../data/services/photo_picker_service.dart';
 import '../../utils/intake_matcher.dart';
+import '../../utils/reward_calculator.dart';
 import '../../utils/time_format.dart';
 
 class HomeViewModel extends ChangeNotifier {
@@ -18,6 +20,7 @@ class HomeViewModel extends ChangeNotifier {
     required this._intakes,
     required this._medications,
     required this._prescriptions,
+    required this._rewards,
     required this._picker,
     required this._backup,
     required this._backupFiles,
@@ -31,6 +34,7 @@ class HomeViewModel extends ChangeNotifier {
   final IntakeRepository _intakes;
   final MedicationRepository _medications;
   final PrescriptionRepository _prescriptions;
+  final RewardRepository _rewards;
   final PhotoPickerService _picker;
   final BackupRepository _backup;
   final BackupFileService _backupFiles;
@@ -47,6 +51,28 @@ class HomeViewModel extends ChangeNotifier {
   DateTime today = DateTime.now();
   List<Medication> medications = const [];
   DaySummary summary = const DaySummary(slots: [], unscheduled: []);
+  RewardState rewards = RewardState.empty;
+
+  /// 몬스터 이름. prescription_id → 이름.
+  Map<int, String> monsterNames = const {};
+
+  /// 싸우는 중인 몬스터. 먼저 등록한 처방부터.
+  List<MonsterState> get activeMonsters => [
+    for (final m in rewards.monsters)
+      if (m.isActive) m,
+  ];
+
+  /// 오늘 받은 보상. 없으면 null.
+  DayReward? get todayReward => rewards.on(today);
+
+  /// 경험치를 받을 수 있는 약(영양제·처방약)이 있거나 이미 받은 적이 있다.
+  bool get showsExp =>
+      rewards.totalExp > 0 ||
+      medications.any(
+        (m) =>
+            m.kind == MedicationKind.supplement ||
+            m.kind == MedicationKind.prescription,
+      );
 
   /// 시간대별 일정. 시간순.
   List<(int, List<DoseSlot>)> get slotsByTime {
@@ -84,9 +110,16 @@ class HomeViewModel extends ChangeNotifier {
     final medications = await _medications.getAll();
     final records = await _intakes.recordsOn(now);
     final prescriptions = await _prescriptions.scheduledOn(now);
+    final rewards = await _rewards.current();
+    final names = await _rewards.monsterNames([
+      for (final m in rewards.monsters)
+        if (m.isActive) m.prescription,
+    ]);
     if (_disposed) return;
     today = now;
     this.medications = medications;
+    this.rewards = rewards;
+    monsterNames = names;
     summary = summarizeDay(medications, records, prescriptions: prescriptions);
     loading = false;
     notifyListeners();

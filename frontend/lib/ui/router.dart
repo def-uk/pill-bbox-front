@@ -19,6 +19,8 @@ import 'medication/medication_list_screen.dart';
 import 'medication/medication_list_view_model.dart';
 import 'medication/prescription_edit_screen.dart';
 import 'medication/prescription_edit_view_model.dart';
+import 'monster/monster_screen.dart';
+import 'monster/monster_view_model.dart';
 import 'result/result_screen.dart';
 import 'result/result_view_model.dart';
 
@@ -31,6 +33,7 @@ GoRouter buildRouter() => GoRouter(
           intakes: context.read(),
           medications: context.read(),
           prescriptions: context.read(),
+          rewards: context.read(),
           picker: context.read(),
           backup: context.read(),
           backupFiles: context.read(),
@@ -50,6 +53,7 @@ GoRouter buildRouter() => GoRouter(
           intakes: context.read(),
           labels: context.read(),
           prescriptions: context.read(),
+          rewards: context.read(),
         )..detect(),
         child: const ResultScreen(),
       ),
@@ -60,6 +64,7 @@ GoRouter buildRouter() => GoRouter(
         create: (context) => MedicationListViewModel(
           medications: context.read(),
           prescriptions: context.read(),
+          rewards: context.read(),
         )..load(),
         child: const MedicationListScreen(),
       ),
@@ -118,6 +123,20 @@ GoRouter buildRouter() => GoRouter(
           ],
         ),
       ],
+    ),
+    GoRoute(
+      path: '/monsters/:pid',
+      redirect: (context, state) =>
+          int.tryParse(state.pathParameters['pid']!) == null ? '/' : null,
+      builder: (context, state) => ChangeNotifierProvider(
+        create: (context) => MonsterViewModel(
+          prescriptionId: int.parse(state.pathParameters['pid']!),
+          rewards: context.read(),
+          prescriptions: context.read(),
+          intakes: context.read(),
+        )..load(),
+        child: const MonsterScreen(),
+      ),
     ),
     GoRoute(
       path: '/history',

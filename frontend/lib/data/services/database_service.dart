@@ -18,7 +18,7 @@ class DatabaseService {
     return _factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 4,
+        version: 5,
         onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
         onCreate: _create,
         onUpgrade: _upgrade,
@@ -58,6 +58,7 @@ class DatabaseService {
     _createAppearances(batch);
     _createDrugInfos(batch);
     _createPrescriptions(batch);
+    _createMonsters(batch);
     await batch.commit(noResult: true);
   }
 
@@ -70,6 +71,12 @@ class DatabaseService {
         ..execute('ALTER TABLE medications ADD COLUMN kind TEXT')
         ..execute('ALTER TABLE medications ADD COLUMN daily_limit INTEGER');
       _createPrescriptions(batch);
+    }
+    if (from < 5) {
+      if (from >= 4) {
+        batch.execute('ALTER TABLE prescriptions ADD COLUMN ended_on TEXT');
+      }
+      _createMonsters(batch);
     }
     await batch.commit(noResult: true);
   }
@@ -104,7 +111,8 @@ class DatabaseService {
         start_date TEXT NOT NULL,
         days INTEGER NOT NULL,
         status TEXT NOT NULL DEFAULT 'active',
-        created_at INTEGER NOT NULL
+        created_at INTEGER NOT NULL,
+        ended_on TEXT
       )''')
     ..execute('''
       CREATE TABLE prescription_items (
@@ -114,6 +122,16 @@ class DatabaseService {
         dose_per_take INTEGER NOT NULL,
         times TEXT NOT NULL
       )''');
+
+  /// 버전 5. 처방 몬스터의 생김새(처방 속 약의 색·모양). 이름이 바뀌지 않게 처음 정한 것을 둔다.
+  /// 체력과 경험치는 기록에서 다시 세므로 저장하지 않는다 (utils/reward_calculator.dart).
+  /// 처방을 끝낸 날(prescriptions.ended_on)도 이때 더했다.
+  static void _createMonsters(Batch batch) => batch.execute('''
+    CREATE TABLE monsters (
+      prescription_id INTEGER PRIMARY KEY REFERENCES prescriptions(id) ON DELETE CASCADE,
+      color TEXT NOT NULL,
+      shape TEXT NOT NULL
+    )''');
 
   Future<void> close() async {
     final database = _database;

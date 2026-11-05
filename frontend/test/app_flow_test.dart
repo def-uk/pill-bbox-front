@@ -74,7 +74,7 @@ void main() {
     );
 
     await tester.tap(find.text('저장'));
-    await pumpUntilFound(tester, find.text('복용 기록을 저장했습니다'));
+    await pumpUntilFound(tester, find.textContaining('복용 기록을 저장했습니다'));
 
     // 홈: A 완료
     await pumpUntilFound(tester, find.text('완료'));

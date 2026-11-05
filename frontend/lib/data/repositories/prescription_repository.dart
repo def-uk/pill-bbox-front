@@ -45,6 +45,10 @@ class PrescriptionRepository extends ChangeNotifier {
               PrescriptionStatus.fromName(row['status']) ??
               PrescriptionStatus.active,
           items: items[row['id']] ?? const [],
+          endedOn: switch (row['ended_on']) {
+            final String s => parseDateKey(s),
+            _ => null,
+          },
         ),
     ];
   }
@@ -68,6 +72,7 @@ class PrescriptionRepository extends ChangeNotifier {
     required int days,
     required List<PrescriptionItem> items,
     PrescriptionStatus? status,
+    DateTime? endedOn,
   }) async {
     if (days < 1) throw ArgumentError.value(days, 'days');
     if (items.isEmpty) throw ArgumentError.value(items, 'items');
@@ -76,6 +81,10 @@ class PrescriptionRepository extends ChangeNotifier {
       'start_date': dateKey(startDate),
       'days': days,
       'status': ?status?.name,
+      if (status != null)
+        'ended_on': status == PrescriptionStatus.ended && endedOn != null
+            ? dateKey(endedOn)
+            : null,
     };
     final savedId = await db.transaction((txn) async {
       final prescriptionId =
@@ -112,6 +121,43 @@ class PrescriptionRepository extends ChangeNotifier {
     }, MedicationKind.prescription);
     notifyListeners();
     return savedId;
+  }
+
+  /// 처방을 끝낸다. 의사가 약을 중단했을 때. 몬스터는 물러나고 오늘부터 일정에서 빠진다.
+  Future<void> end(int id) async {
+    final db = await _db.database;
+    await db.update(
+      'prescriptions',
+      {'status': PrescriptionStatus.ended.name, 'ended_on': dateKey(_now())},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    notifyListeners();
+  }
+
+  /// 몬스터 생김새. 처음 정해지면 바꾸지 않는다. prescription_id → (색, 모양).
+  Future<Map<int, (String, String)>> monsterLooks() async {
+    final db = await _db.database;
+    return {
+      for (final row in await db.query('monsters'))
+        row['prescription_id']! as int: (
+          row['color']! as String,
+          row['shape']! as String,
+        ),
+    };
+  }
+
+  /// 생김새가 아직 없는 처방에만 남긴다.
+  Future<void> setMonsterLook(
+    int prescriptionId,
+    String color,
+    String shape,
+  ) async {
+    final db = await _db.database;
+    await db.rawInsert(
+      'INSERT OR IGNORE INTO monsters (prescription_id, color, shape) VALUES (?, ?, ?)',
+      [prescriptionId, color, shape],
+    );
   }
 
   /// 처방을 지운다. 약과 복용 기록은 그대로 둔다.
