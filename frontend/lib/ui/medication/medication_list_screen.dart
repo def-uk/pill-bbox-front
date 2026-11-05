@@ -8,6 +8,7 @@ import '../../utils/time_format.dart';
 import '../common/theme.dart';
 import '../common/widgets.dart';
 import 'medication_list_view_model.dart';
+import 'prescription_source_sheet.dart';
 
 class MedicationListScreen extends StatelessWidget {
   const MedicationListScreen({super.key});
@@ -19,7 +20,7 @@ class MedicationListScreen extends StatelessWidget {
       leading: const Icon(Icons.add_rounded, color: AppColors.primary),
       title: const Text('처방 등록', style: TextStyle(color: AppColors.primary)),
       subtitle: const Text('병원에서 받은 약과 기간, 복용 시간'),
-      onTap: () => context.push('/medications/prescriptions/new'),
+      onTap: () => startPrescription(context),
     );
     return Scaffold(
       appBar: AppBar(title: const Text('약 관리')),
@@ -32,7 +33,7 @@ class MedicationListScreen extends StatelessWidget {
             message: '약과 복용 시간을 등록하면 오늘 화면에 시간대별로 보여요.',
             action: FilledButton.tonal(
               style: tonalButtonStyle,
-              onPressed: () => context.push('/medications/prescriptions/new'),
+              onPressed: () => startPrescription(context),
               child: const Text('처방 등록'),
             ),
           ),

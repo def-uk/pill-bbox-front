@@ -169,6 +169,14 @@ class _RewardScreenState extends State<RewardScreen>
       ),
       bottomNavigationBar: BottomActionBar(
         children: [
+          // 퇴치했으면 얻은 펫과 퇴치 기록을 컬렉션에서 바로 본다 (상황 A · 8쪽).
+          if (outcome.monsters.any((m) => m.after.isDefeated))
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => context.go('/collection'),
+                child: const Text('컬렉션에 전시'),
+              ),
+            ),
           Expanded(
             child: FilledButton(
               onPressed: () => context.pop(),

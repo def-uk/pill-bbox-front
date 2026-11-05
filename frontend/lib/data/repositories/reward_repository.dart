@@ -1,4 +1,5 @@
 import '../../utils/monster_look.dart';
+import '../models/appearance.dart';
 import '../../utils/reward_calculator.dart';
 import '../models/prescription.dart';
 import 'drug_info_repository.dart';
@@ -43,13 +44,7 @@ class RewardRepository {
       };
       if (look == null) {
         for (final item in p.items) {
-          final drug = (await _drugs.cached(item.medicationId))?.detail;
-          look =
-              (drug == null ? null : lookFromDrug(drug.colors, drug.shape)) ??
-              lookFromAppearances([
-                for (final (id, a) in appearances)
-                  if (id == item.medicationId) a,
-              ]);
+          look = await _itemLook(item.medicationId, appearances);
           if (look != null) break;
         }
         if (look != null) {
@@ -59,6 +54,33 @@ class RewardRepository {
       looks[p.id] = look;
     }
     return looks;
+  }
+
+  /// 약 하나의 생김새. 식약처 생김새를 먼저, 없으면 사진으로 남긴 색·모양.
+  Future<MonsterLook?> _itemLook(
+    int medicationId,
+    List<(int, Appearance)> appearances,
+  ) async {
+    final drug = (await _drugs.cached(medicationId))?.detail;
+    return (drug == null ? null : lookFromDrug(drug.colors, drug.shape)) ??
+        lookFromAppearances([
+          for (final (id, a) in appearances)
+            if (id == medicationId) a,
+        ]);
+  }
+
+  /// 새 몬스터 화면에서 고를 수 있는 생김새. 처방 속 약들의 생김새가 먼저, 그다음 [presetMonsterLooks].
+  Future<List<MonsterLook>> lookChoices(Prescription prescription) async {
+    final appearances = await _medications.appearances();
+    final choices = <MonsterLook>[];
+    for (final item in prescription.items) {
+      final look = await _itemLook(item.medicationId, appearances);
+      if (look != null && !choices.contains(look)) choices.add(look);
+    }
+    for (final look in presetMonsterLooks) {
+      if (!choices.contains(look)) choices.add(look);
+    }
+    return choices;
   }
 
   /// 처방마다 몬스터 이름 ([monsterLooks]로 짓는다).

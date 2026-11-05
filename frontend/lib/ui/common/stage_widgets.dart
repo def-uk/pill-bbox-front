@@ -42,6 +42,50 @@ class MeterBar extends StatelessWidget {
   }
 }
 
+/// 몬스터 체력. 처방이 짧으면(14일까지) 하루 한 칸씩 나눠 보여 주고, 길면 한 줄 막대.
+class HpBar extends StatelessWidget {
+  const HpBar({
+    super.key,
+    required this.hp,
+    required this.maxHp,
+    this.height = 6,
+  });
+
+  final int hp;
+  final int maxHp;
+  final double height;
+
+  /// 이보다 길면 칸으로 나누지 않는다.
+  static const maxSegments = 14;
+
+  @override
+  Widget build(BuildContext context) {
+    if (maxHp <= 0 || maxHp > maxSegments) {
+      return MeterBar(
+        value: maxHp == 0 ? 0 : hp / maxHp,
+        color: hpColor,
+        height: height,
+      );
+    }
+    return Row(
+      spacing: maxHp > 7 ? 2 : 4,
+      children: [
+        for (var i = 0; i < maxHp; i++)
+          Expanded(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                // 왼쪽부터 깎인다.
+                color: i < maxHp - hp ? AppColors.hairline : hpColor,
+                borderRadius: BorderRadius.all(Radius.circular(height / 2)),
+              ),
+              child: SizedBox(height: height),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 /// 몬스터 그림, 이름, 체력 막대. 약 이름·병명은 나오지 않는다.
 class MonsterFigure extends StatelessWidget {
   const MonsterFigure({
@@ -103,11 +147,7 @@ class MonsterFigure extends StatelessWidget {
                   style: AppTypography.captionStrong,
                 ),
                 const SizedBox(height: AppSpacing.xxs),
-                MeterBar(
-                  value: maxHp == 0 ? 0 : hp / maxHp,
-                  color: hpColor,
-                  height: 6,
-                ),
+                HpBar(hp: hp, maxHp: maxHp),
                 const SizedBox(height: 2),
                 Text(
                   '체력 $hp / $maxHp',
@@ -192,6 +232,7 @@ class StageCard extends StatelessWidget {
     this.accessoryId,
     this.pet,
     this.hud,
+    this.onTapCharacter,
   });
 
   final String? skinId;
@@ -202,6 +243,9 @@ class StageCard extends StatelessWidget {
 
   /// 하늘 위쪽에 얹는 줄(날짜, 뽑기권, 메뉴).
   final Widget? hud;
+
+  /// 캐릭터를 누르면. 성장과 연속 기록을 보여 준다.
+  final VoidCallback? onTapCharacter;
 
   final Growth growth;
   final List<MonsterState> monsters;
@@ -239,12 +283,16 @@ class StageCard extends StatelessWidget {
                 bottom: _ground - _sink,
                 child: Center(
                   child: _Bobbing(
-                    child: CharacterWithPet(
-                      stageExp: growth.exp,
-                      skinId: skinId,
-                      accessoryId: accessoryId,
-                      pet: pet,
-                      size: character,
+                    child: _Tappable(
+                      label: '내 캐릭터 보기',
+                      onTap: onTapCharacter,
+                      child: CharacterWithPet(
+                        stageExp: growth.exp,
+                        skinId: skinId,
+                        accessoryId: accessoryId,
+                        pet: pet,
+                        size: character,
+                      ),
                     ),
                   ),
                 ),
@@ -297,6 +345,29 @@ class StageCard extends StatelessWidget {
   }
 }
 
+/// 누를 수 있으면 버튼으로 읽히게 감싼다.
+class _Tappable extends StatelessWidget {
+  const _Tappable({required this.label, required this.child, this.onTap});
+
+  final String label;
+  final VoidCallback? onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (onTap == null) return child;
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: MouseRegion(cursor: SystemMouseCursors.click, child: child),
+      ),
+    );
+  }
+}
+
 /// 싸우는 중인 처방 몬스터 줄.
 class _MonsterLineup extends StatelessWidget {
   const _MonsterLineup({
@@ -322,7 +393,12 @@ class _MonsterLineup extends StatelessWidget {
       maxHp: m.maxHp,
       size: size,
       width: width,
-      caption: m.attackedOn(today) ? '오늘 -1' : null,
+      caption: m.attackedOn(today)
+          ? '오늘 -1'
+          : switch (m.daysLeftOn(today)) {
+              0 => null,
+              final left => '$left일 남음',
+            },
       onTap: () => onTap(m),
     );
     return Padding(

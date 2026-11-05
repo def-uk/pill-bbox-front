@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../data/models/intake_record.dart';
 import '../../data/models/medication.dart';
 import '../../utils/intake_matcher.dart';
+import '../../utils/reward_calculator.dart';
 import '../../utils/time_format.dart';
 import '../common/creature_art.dart';
 import '../common/kind_picker.dart';
@@ -12,6 +13,7 @@ import '../common/medication_picker.dart';
 import '../common/stage_widgets.dart';
 import '../common/theme.dart';
 import '../common/widgets.dart';
+import '../shell/app_shell.dart';
 import 'home_view_model.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -157,7 +159,24 @@ class HomeScreen extends StatelessWidget {
               today: vm.today,
               onTapMonster: (m) =>
                   context.push('/monsters/${m.prescription.id}'),
+              onTapCharacter: () => showModalBottomSheet<void>(
+                context: context,
+                // 탭 화면에서 열어도 아래 바와 기록하기 버튼 위에 뜨게 한다.
+                useRootNavigator: true,
+                showDragHandle: true,
+                isScrollControlled: true,
+                builder: (_) => _CharacterSheet(vm: vm),
+              ),
             ),
+            if (vm.reminder case final reminder?) ...[
+              const SizedBox(height: AppSpacing.md),
+              ContentWidth(
+                child: _ReminderCard(
+                  reminder: reminder,
+                  onTap: () => showCaptureSheet(context),
+                ),
+              ),
+            ],
             if (vm.untyped.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.md),
               ContentWidth(
@@ -565,6 +584,246 @@ class _EmptyGuide extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 복용 시간이 되면 홈 위에 뜨는 알림 카드 (상황 A · 5쪽). 누르면 바로 찍는다.
+class _ReminderCard extends StatelessWidget {
+  const _ReminderCard({required this.reminder, required this.onTap});
+
+  final DoseReminder reminder;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.ink,
+      borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(
+            children: [
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.all(Radius.circular(AppRadius.sm)),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(AppSpacing.xs),
+                  child: Icon(
+                    Icons.notifications_active_rounded,
+                    color: AppColors.cream,
+                    size: 22,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '알약몬 · ${formatMinuteOfDay(reminder.time)}',
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.inkDisabled,
+                        fontFeatures: AppTypography.tabular,
+                      ),
+                    ),
+                    Text(
+                      reminder.title,
+                      style: AppTypography.bodyStrong.copyWith(
+                        color: AppColors.cream,
+                      ),
+                    ),
+                    Text(
+                      reminder.detail,
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.inkDisabled,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                '바로 찍기',
+                style: AppTypography.captionStrong.copyWith(
+                  color: AppColors.primaryOnDark,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 캐릭터를 누르면 뜨는 성장 정보 (상황 B · 13쪽): 단계, 경험치, 연속 기록, 오늘 영양제 보상.
+class _CharacterSheet extends StatelessWidget {
+  const _CharacterSheet({required this.vm});
+
+  final HomeViewModel vm;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final growth = vm.growth;
+    final stage = growth.stage;
+    final streak = vm.streak;
+    final toTicket = ticketStreakDays - streak % ticketStreakDays;
+    final (icon, today) = switch (vm) {
+      _ when !vm.hasSupplementsToday => (
+        Icons.event_note_rounded,
+        '영양제 일정을 정하면 다 지킨 날마다 경험치 +$supplementDayExp',
+      ),
+      _ when vm.supplementsDoneToday => (
+        Icons.verified_rounded,
+        '오늘 권장량 채움 · 더 먹어도 경험치는 그대로',
+      ),
+      _ => (
+        Icons.radio_button_unchecked_rounded,
+        '오늘 영양제 일정을 다 지키면 경험치 +$supplementDayExp',
+      ),
+    };
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter,
+          0,
+          AppSpacing.gutter,
+          AppSpacing.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('내 캐릭터', style: textTheme.titleLarge),
+            const SizedBox(height: AppSpacing.md),
+            Center(
+              child: CharacterWithPet(
+                stageExp: growth.exp,
+                skinId: vm.equipment.skin?.id,
+                accessoryId: vm.equipment.accessory?.id,
+                pet: vm.pet,
+                size: 140,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '성장 ${stage.index + 1}단계 · ${stage.label}',
+              textAlign: TextAlign.center,
+              style: textTheme.headlineSmall,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Text('경험치', style: textTheme.titleMedium),
+                const Spacer(),
+                Text(
+                  '${(growth.progress * 100).round()}%',
+                  style: AppTypography.bodyStrong.copyWith(
+                    color: AppColors.primary,
+                    fontFeatures: AppTypography.tabular,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xxs),
+            GrowthBar(growth: growth),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              spacing: AppSpacing.xs,
+              children: [
+                Expanded(
+                  child: _StatTile(
+                    icon: Icons.local_fire_department_rounded,
+                    value: '$streak일',
+                    label: '연속 기록',
+                  ),
+                ),
+                Expanded(
+                  child: _StatTile(
+                    icon: Icons.confirmation_number_rounded,
+                    value: '$toTicket일',
+                    label: '다음 뽑기권까지',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, size: 20, color: AppColors.primary),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Text(
+                    today,
+                    style: AppTypography.callout.copyWith(
+                      color: AppColors.inkMuted,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  const _StatTile({
+    required this.icon,
+    required this.value,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceSunken,
+        borderRadius: BorderRadius.all(Radius.circular(AppRadius.md)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        child: Row(
+          children: [
+            Icon(icon, size: 22, color: AppColors.primary),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    value,
+                    style: AppTypography.bodyStrong.copyWith(
+                      fontFeatures: AppTypography.tabular,
+                    ),
+                  ),
+                  Text(
+                    label,
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.inkMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

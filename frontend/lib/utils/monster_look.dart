@@ -8,6 +8,16 @@ typedef MonsterLook = ({String color, String shape});
 /// 생김새를 모를 때의 이름.
 const defaultMonsterName = '처방 몬스터';
 
+/// 약 생김새를 모르거나 다른 모습을 원할 때 고르는 생김새. 병명·약 이름과 상관없다.
+const presetMonsterLooks = <MonsterLook>[
+  (color: '주황', shape: '동글'),
+  (color: '초록', shape: '길쭉'),
+  (color: '파랑', shape: '캡슐'),
+  (color: '분홍', shape: '동글'),
+  (color: '노랑', shape: '각진'),
+  (color: '보라', shape: '길쭉'),
+];
+
 String monsterName(MonsterLook? look) =>
     look == null ? defaultMonsterName : '${look.color} ${look.shape} 몬스터';
 

@@ -5,8 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/models/drug_info.dart';
 import '../../data/models/medication.dart';
 import '../../utils/intake_matcher.dart';
+import '../../utils/time_format.dart';
+import '../common/drug_widgets.dart';
 import '../common/kind_picker.dart';
 import '../common/theme.dart';
 import '../common/widgets.dart';
@@ -27,7 +30,11 @@ class ResultScreen extends StatelessWidget {
           context.pushReplacement('/reward', extra: (outcome, vm.outcomeLooks));
         } else {
           messenger.showSnackBar(
-            const SnackBar(content: Text('복용 기록을 저장했습니다')),
+            SnackBar(
+              content: Text(
+                '${formatTime(vm.savedAt ?? DateTime.now())} 복용 기록을 저장했어요',
+              ),
+            ),
           );
           context.pop();
         }
@@ -47,6 +54,9 @@ class ResultScreen extends StatelessWidget {
         title: title,
         choices: vm.choices,
         suggestions: suggestions,
+        searchDrugs: vm.canSearchDrugs ? vm.searchDrugs : null,
+        drugDetail: vm.drugDetail,
+        drugImageUrl: vm.drugImageUrl,
       ),
     );
 
@@ -109,7 +119,14 @@ class ResultScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  ?_CompareSummary.of(vm.lines),
+                  ?_CompareSummary.of(
+                    vm.lines,
+                    toCheck:
+                        vm.unknowns.length +
+                        vm.lines
+                            .where((l) => vm.correctionOf(l) != null)
+                            .length,
+                  ),
                   if (vm.noPills)
                     _NoPills(
                       hasUnknowns: vm.unknowns.isNotEmpty,
@@ -195,19 +212,31 @@ Color _markColor({required bool review}) =>
 /// 사진 바로 아래, 예정과 비교한 한 줄 요약(`compare-summary`). 이 앱의 핵심 화면 요소다.
 /// 다 맞으면 연한 바이올렛, 예정과 다른 약이 있으면 연한 주황.
 class _CompareSummary extends StatelessWidget {
-  const _CompareSummary({required this.text, required this.review});
+  const _CompareSummary({
+    required this.headline,
+    required this.text,
+    required this.review,
+  });
 
+  /// "예정 3종 중 2종 확실 · 2개는 눌러서 확인" (상황 A · 6쪽).
+  final String headline;
   final String text;
   final bool review;
 
   /// 지금 예정된 약이 하나도 없으면 비교할 것이 없어 null.
-  static _CompareSummary? of(List<ResultLine> lines) {
+  /// [toCheck]: 눌러서 확인할 것(알 수 없는 물체, 더 비슷한 약이 있는 줄)의 수.
+  static _CompareSummary? of(List<ResultLine> lines, {int toCheck = 0}) {
     final scheduled = [
       for (final l in lines)
         if (l.status != MatchStatus.unscheduled) l,
     ];
     if (scheduled.isEmpty) return null;
+    final sure = scheduled.where((l) => l.status == MatchStatus.ok).length;
     return _CompareSummary(
+      headline: [
+        '예정 ${scheduled.length}종 중 $sure종 확실',
+        if (toCheck > 0) '$toCheck개는 눌러서 확인',
+      ].join(' · '),
       text: [
         for (final l in scheduled)
           switch (l.status) {
@@ -218,7 +247,7 @@ class _CompareSummary extends StatelessWidget {
             MatchStatus.unscheduled => '',
           },
       ].join(', '),
-      review: scheduled.any((l) => l.status != MatchStatus.ok),
+      review: toCheck > 0 || scheduled.any((l) => l.status != MatchStatus.ok),
     );
   }
 
@@ -245,12 +274,24 @@ class _CompareSummary extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: Text(
-                  text,
-                  style: AppTypography.bodyStrong.copyWith(
-                    color: review ? AppColors.review : AppColors.ink,
-                    fontFeatures: AppTypography.tabular,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      headline,
+                      style: AppTypography.bodyStrong.copyWith(
+                        color: review ? AppColors.review : AppColors.ink,
+                        fontFeatures: AppTypography.tabular,
+                      ),
+                    ),
+                    Text(
+                      text,
+                      style: AppTypography.callout.copyWith(
+                        color: AppColors.ink,
+                        fontFeatures: AppTypography.tabular,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -549,10 +590,18 @@ class _ChoiceSearchSheet extends StatefulWidget {
     required this.title,
     required this.choices,
     this.suggestions = const [],
+    this.searchDrugs,
+    this.drugDetail,
+    this.drugImageUrl,
   });
 
   final String title;
   final List<PillChoice> choices;
+
+  /// null이면 식약처에서 찾지 않는다 (서버 없는 빌드).
+  final Future<DrugPage> Function(String query)? searchDrugs;
+  final Future<DrugDetail?> Function(String itemSeq)? drugDetail;
+  final String Function(String itemSeq)? drugImageUrl;
 
   /// 맨 위에 둘 약과 추천하는 까닭: 색·모양이 비슷한 약이나 모델이 헷갈린 약.
   final List<(PillChoice, String)> suggestions;
@@ -563,6 +612,34 @@ class _ChoiceSearchSheet extends StatefulWidget {
 
 class _ChoiceSearchSheetState extends State<_ChoiceSearchSheet> {
   String _query = '';
+
+  /// 식약처에서 찾은 이름과 결과. 이름을 바꾸면 다시 찾을 때까지 숨긴다.
+  String? _drugQuery;
+  Future<DrugPage>? _drugResults;
+
+  bool get _canSearchDrugs =>
+      widget.searchDrugs != null && _query.characters.length >= 2;
+
+  void _searchDrugs() => setState(() {
+    _drugQuery = _query;
+    _drugResults = widget.searchDrugs!(_query);
+  });
+
+  /// 효능·주의·생김새를 먼저 보여 주고, 이 약으로 기록하면 고른다 (상황 B · 11쪽).
+  Future<void> _preview(DrugSummary drug) async {
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _DrugPreviewSheet(
+        drug: drug,
+        detail: widget.drugDetail?.call(drug.itemSeq),
+      ),
+    );
+    if (ok == true && mounted) {
+      Navigator.pop(context, PillChoice.drug(drug));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -632,9 +709,140 @@ class _ChoiceSearchSheetState extends State<_ChoiceSearchSheet> {
                       onTap: () =>
                           Navigator.pop(context, PillChoice.custom(_query)),
                     ),
+                  if (_canSearchDrugs)
+                    ListTile(
+                      leading: const Icon(
+                        Icons.travel_explore_rounded,
+                        color: AppColors.primary,
+                      ),
+                      title: Text("식약처에서 '$_query' 찾기"),
+                      subtitle: const Text('효능과 주의사항을 보고 골라요'),
+                      onTap: _searchDrugs,
+                    ),
+                  if (_drugResults != null && _drugQuery == _query)
+                    FutureBuilder<DrugPage>(
+                      future: _drugResults,
+                      builder: (context, snapshot) => switch (snapshot) {
+                        AsyncSnapshot(hasError: true) => const ListTile(
+                          title: Text('식약처에서 찾지 못했어요'),
+                          subtitle: Text('잠시 뒤 다시 해 주세요'),
+                        ),
+                        AsyncSnapshot(:final data?) when data.items.isEmpty =>
+                          const ListTile(title: Text('식약처에도 없는 약입니다')),
+                        AsyncSnapshot(:final data?) => Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SheetSectionLabel('식약처 의약품'),
+                            for (final drug in data.items)
+                              DrugTile(
+                                drug: drug,
+                                imageUrl: widget.drugImageUrl ?? (_) => '',
+                                onTap: () => _preview(drug),
+                              ),
+                          ],
+                        ),
+                        _ => const Padding(
+                          padding: EdgeInsets.all(AppSpacing.md),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                      },
+                    ),
                   if (matches.isEmpty && _query.isEmpty && suggestions.isEmpty)
                     const ListTile(title: Text('찾는 약이 없습니다')),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 식약처에서 고른 약의 효능·주의·생김새. 의료 조언이 아니라 공공데이터를 그대로 보여 준다.
+class _DrugPreviewSheet extends StatelessWidget {
+  const _DrugPreviewSheet({required this.drug, this.detail});
+
+  final DrugSummary drug;
+
+  /// 자세한 정보. 받지 못하면 생김새만 보여 준다.
+  final Future<DrugDetail?>? detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    Widget section(String title, String body) => Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.xxs),
+          Text(body, style: textTheme.bodyMedium),
+        ],
+      ),
+    );
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.gutter,
+                ),
+                children: [
+                  Text(drug.name, style: textTheme.titleLarge),
+                  if (drug.company != null)
+                    Text(
+                      [?drug.company, ?drug.otc].join(' · '),
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.inkMuted,
+                      ),
+                    ),
+                  FutureBuilder<DrugDetail?>(
+                    future: detail,
+                    builder: (context, snapshot) {
+                      if (detail != null &&
+                          snapshot.connectionState != ConnectionState.done) {
+                        return const Padding(
+                          padding: EdgeInsets.all(AppSpacing.lg),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      final guide = snapshot.data?.guide;
+                      final caution = guide?.caution ?? guide?.warning;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          section('효능', guide?.efficacy ?? '식약처에 효능 정보가 없어요'),
+                          if (caution != null) section('주의', caution),
+                          if (drug.looks.isNotEmpty) section('생김새', drug.looks),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    '식약처 공공데이터예요. 먹는 법은 의사·약사의 안내를 따르세요.',
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.inkMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.gutter),
+              child: FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('이 약으로 기록'),
               ),
             ),
           ],

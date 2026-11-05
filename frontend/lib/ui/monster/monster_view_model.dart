@@ -36,6 +36,12 @@ class MonsterViewModel extends ChangeNotifier {
   /// 생김새. 모르면 null.
   MonsterLook? look;
 
+  /// 다른 몬스터로 바꿀 때 차례로 보여 줄 생김새 ([RewardRepository.lookChoices]).
+  List<MonsterLook> lookChoices = const [];
+
+  /// 처방 마지막 날까지 남은 날. 오늘을 넣어 센다.
+  int get daysLeft => monster?.daysLeftOn(today) ?? 0;
+
   DateTime get today {
     final t = _now();
     return DateTime(t.year, t.month, t.day);
@@ -64,12 +70,28 @@ class MonsterViewModel extends ChangeNotifier {
     final looks = monster == null
         ? const <int, MonsterLook?>{}
         : await _rewards.monsterLooks([monster.prescription]);
+    final choices = monster == null
+        ? const <MonsterLook>[]
+        : await _rewards.lookChoices(monster.prescription);
     if (_disposed) return;
     this.monster = monster;
     look = looks[prescriptionId];
+    lookChoices = choices;
     name = monsterName(look);
     loading = false;
     notifyListeners();
+  }
+
+  /// 다음 생김새로 바꾼다. 이름도 생김새를 따라 바뀐다. 병명·약 이름은 쓰지 않는다.
+  Future<void> nextLook() async {
+    if (lookChoices.isEmpty) return;
+    final at = look == null ? -1 : lookChoices.indexOf(look!);
+    final next = lookChoices[(at + 1) % lookChoices.length];
+    await _prescriptions.replaceMonsterLook(
+      prescriptionId,
+      next.color,
+      next.shape,
+    );
   }
 
   /// 처방을 끝낸다. 몬스터가 물러나고 깎은 체력만큼 경험치를 받는다.

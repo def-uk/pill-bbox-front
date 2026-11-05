@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../data/repositories/settings_repository.dart';
+import '../data/services/prescription_scanner.dart';
 import '../utils/monster_look.dart';
 import '../utils/reward_calculator.dart';
 import '../utils/time_format.dart';
@@ -28,6 +29,7 @@ import 'medication/medication_list_screen.dart';
 import 'medication/medication_list_view_model.dart';
 import 'medication/prescription_edit_screen.dart';
 import 'medication/prescription_edit_view_model.dart';
+import 'monster/monster_intro_screen.dart';
 import 'monster/monster_screen.dart';
 import 'monster/monster_view_model.dart';
 import 'result/result_screen.dart';
@@ -86,6 +88,7 @@ GoRouter buildRouter(SettingsRepository settings) {
             labels: context.read(),
             prescriptions: context.read(),
             rewards: context.read(),
+            drugs: context.read(),
           )..detect(),
           child: const ResultScreen(),
         ),
@@ -131,6 +134,21 @@ GoRouter buildRouter(SettingsRepository settings) {
           )..load(),
           child: const MonsterScreen(),
         ),
+        routes: [
+          // 처방을 막 등록했을 때 (상황 A · 4쪽).
+          GoRoute(
+            path: 'new',
+            builder: (context, state) => ChangeNotifierProvider(
+              create: (context) => MonsterViewModel(
+                prescriptionId: int.parse(state.pathParameters['pid']!),
+                rewards: context.read(),
+                prescriptions: context.read(),
+                intakes: context.read(),
+              )..load(),
+              child: const MonsterIntroScreen(),
+            ),
+          ),
+        ],
       ),
       ShellRoute(
         builder: (context, state, child) => ChangeNotifierProvider(
@@ -214,7 +232,13 @@ GoRouter buildRouter(SettingsRepository settings) {
               GoRoute(
                 parentNavigatorKey: root,
                 path: 'prescriptions/new',
-                builder: (context, state) => _prescriptionEdit(null),
+                // 처방전을 찍었으면 읽은 초안을 넘겨받는다.
+                builder: (context, state) => _prescriptionEdit(
+                  null,
+                  scan: state.extra is PrescriptionScan
+                      ? state.extra! as PrescriptionScan
+                      : null,
+                ),
               ),
               GoRoute(
                 parentNavigatorKey: root,
@@ -277,13 +301,15 @@ GoRouter buildRouter(SettingsRepository settings) {
   );
 }
 
-Widget _prescriptionEdit(int? id) => ChangeNotifierProvider(
-  create: (context) => PrescriptionEditViewModel(
-    prescriptions: context.read(),
-    medications: context.read(),
-    labels: context.read(),
-    drugs: context.read(),
-    prescriptionId: id,
-  )..load(),
-  child: const PrescriptionEditScreen(),
-);
+Widget _prescriptionEdit(int? id, {PrescriptionScan? scan}) =>
+    ChangeNotifierProvider(
+      create: (context) => PrescriptionEditViewModel(
+        prescriptions: context.read(),
+        medications: context.read(),
+        labels: context.read(),
+        drugs: context.read(),
+        prescriptionId: id,
+        scan: scan,
+      )..load(),
+      child: const PrescriptionEditScreen(),
+    );

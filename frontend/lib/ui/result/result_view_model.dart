@@ -4,8 +4,10 @@ import 'package:flutter/foundation.dart';
 
 import '../../data/models/appearance.dart';
 import '../../data/models/detection.dart';
+import '../../data/models/drug_info.dart';
 import '../../data/models/medication.dart';
 import '../../data/models/pill_label.dart';
+import '../../data/repositories/drug_info_repository.dart';
 import '../../data/repositories/intake_repository.dart';
 import '../../data/repositories/medication_repository.dart';
 import '../../data/repositories/prescription_repository.dart';
@@ -53,11 +55,20 @@ class ResultLine {
 /// 사용자가 이름을 직접 넣은 약([isCustom]).
 class PillChoice {
   const PillChoice({this.medication, this.categoryId, required this.name})
-    : isCustom = false;
+    : isCustom = false,
+      drug = null;
 
   /// 이름만 있는 새 약. 모델이 모르는 약이라 다음 사진에서는 색·모양으로만 추천한다.
   const PillChoice.custom(this.name)
     : medication = null,
+      categoryId = null,
+      isCustom = true,
+      drug = null;
+
+  /// 식약처에서 찾아 고른 새 약 (상황 B · 11쪽). 등록할 때 약 정보를 이어 둔다.
+  PillChoice.drug(DrugSummary this.drug)
+    : name = drug.name,
+      medication = null,
       categoryId = null,
       isCustom = true;
 
@@ -65,6 +76,7 @@ class PillChoice {
   final int? categoryId;
   final String name;
   final bool isCustom;
+  final DrugSummary? drug;
 }
 
 /// 모델은 알약으로 보지 않았지만 배경과 다른 색의 물체. 사용자가 무엇인지 고르면 기록한다.
@@ -99,6 +111,7 @@ class ResultViewModel extends ChangeNotifier {
     required this._labels,
     this._prescriptions,
     this._rewards,
+    this._drugs,
     Future<List<FoundObject>> Function(Uint8List photo)? objectFinder,
     DateTime Function()? now,
   }) : _findObjects = objectFinder ?? findPhotoObjects,
@@ -111,6 +124,17 @@ class ResultViewModel extends ChangeNotifier {
   final PillLabelService _labels;
   final PrescriptionRepository? _prescriptions;
   final RewardRepository? _rewards;
+
+  /// 식약처 의약품 정보. 없으면 식약처에서 찾지 않는다.
+  final DrugInfoRepository? _drugs;
+
+  /// 처음 기록하는 약 중 식약처에서 고른 약. 줄 키 → 품목기준코드.
+  final Map<int, String> _drugLinks = {};
+
+  bool get canSearchDrugs => _drugs?.available ?? false;
+  Future<DrugPage> searchDrugs(String query) => _drugs!.search(query);
+  Future<DrugDetail?> drugDetail(String itemSeq) => _drugs!.detail(itemSeq);
+  String drugImageUrl(String itemSeq) => _drugs?.imageUrl(itemSeq) ?? '';
   final Future<List<FoundObject>> Function(Uint8List photo) _findObjects;
   final DateTime Function() _now;
   bool _disposed = false;
@@ -316,9 +340,13 @@ class ResultViewModel extends ChangeNotifier {
     _notify();
   }
 
+  /// 저장한 시각. 저장 뒤 알림에 쓴다.
+  DateTime? savedAt;
+
   /// 확인한 개수로 복용 기록을 저장한다. 처음 기록하는 약은 먼저 등록한다. 저장했으면 true.
   Future<bool> save() async {
     if (!canSave) return false;
+    savedAt = _now();
     status = ResultStatus.saving;
     _notify();
     try {
@@ -498,7 +526,9 @@ class ResultViewModel extends ChangeNotifier {
         return PillChoice(categoryId: l.categoryId, name: name);
       }
     }
-    return PillChoice(categoryId: _nextCustomKey--, name: name);
+    final key = _nextCustomKey--;
+    if (choice.drug case final drug?) _drugLinks[key] = drug.itemSeq;
+    return PillChoice(categoryId: key, name: name);
   }
 
   static _Target _targetOf(PillChoice c) => (
@@ -561,6 +591,13 @@ class ResultViewModel extends ChangeNotifier {
         kind: _newKinds[line.categoryId],
         dailyLimit: line.count,
       );
+      if (_drugLinks.remove(line.categoryId) case final itemSeq?) {
+        try {
+          await _drugs?.link(id, itemSeq);
+        } catch (_) {
+          // 약과 기록은 저장됐다. 약 정보 화면에서 다시 고르면 된다.
+        }
+      }
       _unregistered.remove(line.categoryId);
       _retarget(
         (medicationId: null, key: line.categoryId),
