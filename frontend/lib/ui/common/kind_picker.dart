@@ -18,6 +18,8 @@ Future<MedicationKind?> pickKind(
   MedicationKind? current,
 }) => showModalBottomSheet<MedicationKind>(
   context: context,
+  // 탭 화면에서 열어도 아래 바와 기록하기 버튼 위에 뜨게 한다.
+  useRootNavigator: true,
   showDragHandle: true,
   builder: (sheet) => SafeArea(
     child: Column(

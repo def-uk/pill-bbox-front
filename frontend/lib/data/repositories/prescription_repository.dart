@@ -160,6 +160,20 @@ class PrescriptionRepository extends ChangeNotifier {
     );
   }
 
+  /// 사용자가 고른 생김새로 바꾼다 (새 몬스터 화면의 다른 몬스터로 바꾸기).
+  Future<void> replaceMonsterLook(
+    int prescriptionId,
+    String color,
+    String shape,
+  ) async {
+    final db = await _db.database;
+    await db.rawInsert(
+      'INSERT OR REPLACE INTO monsters (prescription_id, color, shape) VALUES (?, ?, ?)',
+      [prescriptionId, color, shape],
+    );
+    notifyListeners();
+  }
+
   /// 처방을 지운다. 약과 복용 기록은 그대로 둔다.
   Future<void> delete(int id) async {
     final db = await _db.database;

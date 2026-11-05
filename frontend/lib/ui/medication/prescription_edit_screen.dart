@@ -56,7 +56,13 @@ class PrescriptionEditScreen extends StatelessWidget {
     }
 
     Future<void> save() async {
-      if (await vm.save() && context.mounted) context.pop();
+      if (!await vm.save() || !context.mounted) return;
+      // 새 처방이면 새 몬스터를 보여 준다 (상황 A · 4쪽). 닫으면 약 관리로 돌아온다.
+      if (vm.isNew && vm.savedId != null) {
+        context.pushReplacement('/monsters/${vm.savedId}/new');
+      } else {
+        context.pop();
+      }
     }
 
     Future<void> delete() async {
@@ -73,7 +79,13 @@ class PrescriptionEditScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(vm.isNew ? '처방 등록' : '처방 수정'),
+        title: Text(
+          vm.fromScan
+              ? '처방전 확인'
+              : vm.isNew
+              ? '처방 등록'
+              : '처방 수정',
+        ),
         actionsPadding: EdgeInsets.only(right: gutterOf(context) - 12),
         actions: [
           if (!vm.isNew && !vm.loading && !vm.notFound)
@@ -93,7 +105,11 @@ class PrescriptionEditScreen extends StatelessWidget {
         _ => ListView(
           padding: pagePadding(context),
           children: [
-            const SectionLabel('처방받은 약', first: true),
+            if (vm.fromScan) ...[
+              const SizedBox(height: AppSpacing.xs),
+              const _ScanNotice(),
+            ],
+            SectionLabel('처방받은 약', first: !vm.fromScan),
             GroupCard(
               children: [
                 for (final (i, item) in vm.items.indexed)
@@ -200,7 +216,7 @@ class PrescriptionEditScreen extends StatelessWidget {
           Expanded(
             child: FilledButton(
               onPressed: vm.canSave ? save : null,
-              child: const Text('저장'),
+              child: Text(vm.fromScan ? '확인하고 등록' : '저장'),
             ),
           ),
         ],
@@ -338,6 +354,38 @@ class _ItemSheetState extends State<_ItemSheet> {
                         ),
                       ),
                 child: const Text('확인'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 처방전에서 읽은 값은 초안이라 확인하고 고쳐야 한다는 안내.
+class _ScanNotice extends StatelessWidget {
+  const _ScanNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: AppColors.reviewSoft,
+        borderRadius: BorderRadius.all(Radius.circular(AppRadius.md)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.document_scanner_rounded, color: reviewColor),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                '처방전에서 읽은 내용은 초안이에요. 약 이름, 기간, 복용 시간이 '
+                '처방전과 다르면 눌러서 고친 뒤 등록해 주세요.',
+                style: AppTypography.callout.copyWith(color: AppColors.ink),
               ),
             ),
           ],

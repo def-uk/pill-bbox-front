@@ -21,6 +21,9 @@ class DrugInfoRepository {
   Future<DrugPage> search(String query, {int page = 1}) =>
       _service.search(query, page: page);
 
+  /// [itemSeq] 약 정보를 받기만 한다. 고르기 전에 효능·주의·생김새를 보여 줄 때 쓴다. 없으면 null.
+  Future<DrugDetail?> detail(String itemSeq) => _service.detail(itemSeq);
+
   /// 기기에 둔 정보. 이어 둔 약이 없으면 null.
   Future<CachedDrugInfo?> cached(int medicationId) async {
     final db = await _db.database;

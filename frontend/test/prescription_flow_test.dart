@@ -31,6 +31,8 @@ void main() {
     await tester.tap(find.text('복용 시간 정하기'));
     await pumpUntilFound(tester, find.text('처방 등록'));
     await tester.tap(find.text('처방 등록'));
+    await pumpUntilFound(tester, find.text('직접 입력'));
+    await tester.tap(find.text('직접 입력'));
     await pumpUntilFound(tester, find.text('처방받은 약'));
 
     // 약을 넣기 전에는 저장할 수 없다.
@@ -64,6 +66,26 @@ void main() {
     await tester.tap(find.text('28일'));
     await tester.pump();
     await tester.tap(find.text('저장'));
+
+    // 새 몬스터: 28일 체력, 생김새는 바꿀 수 있다. 병명·약 이름은 없다.
+    await pumpUntilFound(tester, find.text('새 몬스터'));
+    expect(find.text('28 / 28'), findsOneWidget);
+    expect(find.textContaining('위장약'), findsNothing);
+    String shownName() => tester
+        .widgetList<Text>(find.textContaining('몬스터'))
+        .map((t) => t.data ?? '')
+        .firstWhere((d) => d.endsWith(' 몬스터') && d != '새 몬스터');
+    final before = shownName();
+    await tester.tap(find.text('다른 몬스터로 바꾸기'));
+    for (var i = 0; i < 50 && shownName() == before; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    expect(shownName(), isNot(before));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('28일 동안 물리치기'));
 
     // 약 관리: 처방 한 줄과 처방약이 된 두 약
     await pumpUntilFound(tester, find.text('샘플약 A (흰색), 위장약'));

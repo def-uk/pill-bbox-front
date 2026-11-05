@@ -9,6 +9,7 @@ import '../../data/repositories/medication_repository.dart';
 import '../../data/repositories/prescription_repository.dart';
 import '../../data/services/drug_info_service.dart';
 import '../../data/services/pill_label_service.dart';
+import '../../data/services/prescription_scanner.dart';
 import '../common/drug_search_sheet.dart';
 
 /// 처방 등록 화면의 약 한 줄. 아직 등록하지 않은 약이면 저장할 때 처방약으로 등록한다.
@@ -62,6 +63,7 @@ class PrescriptionEditViewModel extends ChangeNotifier {
     required this._labels,
     required this._drugs,
     this.prescriptionId,
+    this.scan,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now {
     final today = _now();
@@ -73,6 +75,9 @@ class PrescriptionEditViewModel extends ChangeNotifier {
   final PillLabelService _labels;
   final DrugInfoRepository _drugs;
   final int? prescriptionId;
+
+  /// 처방전에서 읽은 초안. 있으면 새 처방을 이것으로 채운다.
+  final PrescriptionScan? scan;
   final DateTime Function() _now;
   bool _disposed = false;
 
@@ -94,6 +99,12 @@ class PrescriptionEditViewModel extends ChangeNotifier {
   static const quickDays = [3, 5, 7, 14, 28, 30];
 
   bool get isNew => prescriptionId == null;
+
+  /// 처방전에서 읽은 초안을 확인하는 중.
+  bool get fromScan => isNew && scan != null;
+
+  /// 저장한 처방 id. 새로 등록했으면 새 몬스터 화면으로 간다.
+  int? savedId;
   bool get canSave =>
       !loading &&
       !saving &&
@@ -147,8 +158,30 @@ class PrescriptionEditViewModel extends ChangeNotifier {
             ),
       ];
     }
+    if (fromScan) _applyScan(scan!);
     loading = false;
     notifyListeners();
+  }
+
+  /// 읽은 이름이 등록한 약이나 모델이 아는 약과 같으면 그 약으로, 아니면 직접 넣은 이름으로 둔다.
+  void _applyScan(PrescriptionScan scan) {
+    days = scan.days;
+    final drafts = <PrescriptionItemDraft>[];
+    for (final read in scan.items) {
+      final name = read.name.trim();
+      if (name.isEmpty) continue;
+      final medication = medications.where((m) => m.name == name).firstOrNull;
+      final label = availableLabels.where((l) => l.name == name).firstOrNull;
+      final draft = PrescriptionItemDraft(
+        medication: medication,
+        categoryId: medication == null ? label?.categoryId : null,
+        name: medication?.name ?? name,
+        dosePerTake: read.dosePerTake,
+        times: scan.times,
+      );
+      if (!drafts.any(draft.isSameMedication)) drafts.add(draft);
+    }
+    items = drafts;
   }
 
   /// 약 고르기 시트에서 고른 것([DrugSearchSheet])으로 줄을 만든다. 이미 등록한 약이면 그 약을 쓴다.
@@ -264,7 +297,7 @@ class PrescriptionEditViewModel extends ChangeNotifier {
         ),
       );
     }
-    await _prescriptions.save(
+    savedId = await _prescriptions.save(
       id: prescriptionId,
       startDate: startDate,
       days: days,

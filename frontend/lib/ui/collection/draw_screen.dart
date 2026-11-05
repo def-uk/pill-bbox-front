@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/cosmetic.dart';
@@ -45,6 +46,31 @@ class DrawScreen extends StatelessWidget {
                 key: ValueKey(vm.drawSerial),
                 cosmetic: cosmetic,
                 count: count,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                spacing: AppSpacing.xs,
+                children: [
+                  Expanded(
+                    child: FilledButton.tonal(
+                      style: tonalButtonStyle,
+                      onPressed: vm.resultEquipped ? null : vm.equipResult,
+                      child: Text(vm.resultEquipped ? '장착 중' : '장착하기'),
+                    ),
+                  ),
+                  Expanded(
+                    child: FilledButton.tonal(
+                      style: tonalButtonStyle,
+                      onPressed: () async {
+                        final card = await vm.shareCard();
+                        if (context.mounted) {
+                          context.push('/share', extra: card);
+                        }
+                      },
+                      child: const Text('공유 이미지 만들기'),
+                    ),
+                  ),
+                ],
               ),
             ],
             const SectionLabel('확률'),
@@ -229,7 +255,7 @@ class DrawRevealState extends State<DrawReveal>
                         Text(
                           widget.count > 1
                               ? '이미 있는 아이템이에요 · ${widget.count}개째'
-                              : '새 ${cosmetic.slot.label}! 컬렉션에서 장착할 수 있어요',
+                              : '새 ${cosmetic.slot.label}! 컬렉션에 추가했어요',
                           style: AppTypography.caption.copyWith(
                             color: AppColors.inkMuted,
                           ),

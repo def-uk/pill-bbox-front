@@ -35,7 +35,7 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final capture = context.watch<CaptureViewModel>();
-    final onCapture = capture.picking ? null : () => _chooseSource(context);
+    final onCapture = capture.picking ? null : () => showCaptureSheet(context);
     final current = _current;
 
     Widget tab(int i) {
@@ -168,7 +168,7 @@ class _CaptureButton extends StatelessWidget {
 ///
 /// 웹은 사용자가 누른 그 순간에 열어야 브라우저가 카메라·파일 창을 막지 않는다.
 /// 그래서 시트를 닫는 것과 같은 탭 처리 안에서 바로 연다.
-void _chooseSource(BuildContext context) {
+void showCaptureSheet(BuildContext context) {
   final capture = context.read<CaptureViewModel>();
   final messenger = ScaffoldMessenger.of(context);
 
@@ -204,6 +204,8 @@ void _chooseSource(BuildContext context) {
 
   showModalBottomSheet<void>(
     context: context,
+    // 탭 화면에서 열어도 아래 바와 기록하기 버튼 위에 뜨게 한다.
+    useRootNavigator: true,
     showDragHandle: true,
     builder: (sheet) => SafeArea(
       child: Column(

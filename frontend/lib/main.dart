@@ -22,6 +22,7 @@ import 'data/services/photo_picker_service.dart';
 import 'data/services/photo_storage_service.dart';
 import 'data/services/pill_detector.dart';
 import 'data/services/pill_label_service.dart';
+import 'data/services/prescription_scanner.dart';
 import 'data/services/platform_services.dart'
     if (dart.library.js_interop) 'data/services/platform_services_web.dart';
 import 'ui/common/theme.dart';
@@ -58,6 +59,7 @@ class PillboxApp extends StatefulWidget {
     this.backupFiles,
     this.drugInfo,
     this.imageSaver,
+    this.prescriptionScanner,
   });
 
   final DatabaseService database;
@@ -69,6 +71,9 @@ class PillboxApp extends StatefulWidget {
 
   /// 공유 카드 이미지 저장. 없으면 file_picker로 저장한다.
   final ImageSaveService? imageSaver;
+
+  /// 처방전 읽기. 없으면 고정된 초안을 돌려주는 가짜를 쓴다.
+  final PrescriptionScanner? prescriptionScanner;
 
   /// 식약처 의약품 정보. 없으면 API_BASE_URL로 만든다.
   final DrugInfoService? drugInfo;
@@ -100,6 +105,11 @@ class _PillboxAppState extends State<PillboxApp> {
         Provider.value(value: widget.labels),
         Provider.value(value: widget.backupFiles ?? BackupFileService()),
         Provider.value(value: widget.imageSaver ?? ImageSaveService()),
+        Provider<PrescriptionScanner>.value(
+          value:
+              widget.prescriptionScanner ??
+              FakePrescriptionScanner(widget.labels),
+        ),
         ChangeNotifierProvider(
           create: (_) => MedicationRepository(widget.database, widget.photos),
         ),

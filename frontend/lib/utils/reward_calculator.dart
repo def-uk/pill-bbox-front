@@ -48,6 +48,20 @@ class MonsterState {
   bool get isActive => !isDefeated && !isEnded;
 
   bool attackedOn(DateTime day) => attackDays.any((d) => _sameDay(d, day));
+
+  /// [today]부터 처방 마지막 날까지 남은 날. 오늘을 넣어 센다. 퇴치했거나 끝냈으면 0.
+  int daysLeftOn(DateTime today) {
+    if (!isActive) return 0;
+    final p = prescription;
+    final day = DateTime(today.year, today.month, today.day);
+    final from = p.startDate.isAfter(day) ? p.startDate : day;
+    return p.endDate.isBefore(from)
+        ? 0
+        : DateTime.utc(p.endDate.year, p.endDate.month, p.endDate.day)
+                  .difference(DateTime.utc(from.year, from.month, from.day))
+                  .inDays +
+              1;
+  }
 }
 
 /// 하루의 보상.
