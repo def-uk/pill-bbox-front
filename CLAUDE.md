@@ -18,6 +18,21 @@ git switch -c feat/작업-이름
 
 - 커밋 메시지는 한국어로, `feat:`, `fix:`, `docs:` 같은 접두사를 붙입니다 (예: `feat: 약 관리, 일정, 기록 추가`).
 
+## 구현 문서 먼저
+
+프론트(`frontend/`)와 백엔드(`backend/`) 모두, 코드를 고치기 전에 구현 문서를 먼저 쓰고 그 문서대로 구현합니다.
+
+- 브랜치를 딴 뒤 첫 작업으로 `docs/impl/<브랜치 이름에서 />를 -로>.md`를 만듭니다 (예: `feat/model-integration` → `docs/impl/feat-model-integration.md`).
+- 문서에는 아래를 적습니다.
+  - 목적: 무엇을 왜 바꾸는지
+  - 범위: 바뀌는 쪽(프론트, 백엔드, 둘 다)과 하지 않는 것
+  - 설계: 프론트는 바뀌는 View, ViewModel, Repository, Service와 라우트, 백엔드는 API(경로, 요청, 응답), 모델, DB 변경. 둘 다 바뀌면 둘 사이의 API 계약
+  - 작업 순서: 파일 단위로 나눈 단계
+  - 검증: 추가하거나 고칠 테스트, 직접 확인할 것 (`fvm flutter test`, `fvm flutter analyze`, 백엔드 테스트)
+- 문서를 먼저 사용자에게 보여주고 확인을 받은 뒤 구현을 시작합니다.
+- 구현하다 설계가 바뀌면 문서를 먼저 고치고 코드를 맞춥니다. 문서는 같은 PR에 넣습니다.
+- 오타, 문구 수정, 한두 줄짜리 버그 수정처럼 설계가 필요 없는 작업은 문서를 생략해도 됩니다.
+
 ## 실행
 
 Flutter 앱은 `frontend/`에 있습니다. 아래 명령과 이 문서의 앱 경로(`lib/`, `scripts/` 등)는 모두 `frontend/` 기준입니다. Flutter 버전은 fvm으로 고정합니다(`frontend/.fvmrc`). `flutter` 대신 `fvm flutter`를 씁니다.
