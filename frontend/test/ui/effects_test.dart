@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pillbbox/data/models/cosmetic.dart';
 import 'package:pillbbox/data/models/prescription.dart';
+import 'package:pillbbox/data/repositories/settings_repository.dart';
 import 'package:pillbbox/data/services/image_save_service.dart';
 import 'package:pillbbox/ui/collection/draw_screen.dart';
 import 'package:pillbbox/ui/collection/share_card.dart';
@@ -15,6 +16,8 @@ import 'package:pillbbox/ui/reward/reward_screen.dart';
 import 'package:pillbbox/utils/character.dart';
 import 'package:pillbbox/utils/reward_calculator.dart';
 import 'package:provider/provider.dart';
+
+import '../helpers.dart';
 
 MonsterState monster({
   required int dealt,
@@ -140,9 +143,14 @@ void main() {
 
   testWidgets('공유 카드는 캐릭터만 담아 PNG로 저장한다', (tester) async {
     final saver = FakeImageSaver();
+    final db = createTestDatabase();
+    final settings = SettingsRepository(db);
     await tester.pumpWidget(
-      Provider<ImageSaveService>.value(
-        value: saver,
+      MultiProvider(
+        providers: [
+          Provider<ImageSaveService>.value(value: saver),
+          ChangeNotifierProvider.value(value: settings),
+        ],
         child: app(
           ShareCardScreen(
             now: () => DateTime(2026, 11, 20),
@@ -180,5 +188,7 @@ void main() {
     expect(name, '알약몬-캐릭터-2026-11-20.png');
     expect(bytes.sublist(0, 4), [0x89, 0x50, 0x4E, 0x47]);
     expect(find.text('이미지로 저장했어요'), findsOneWidget);
+    // 4주 검증 지표에 쓰는 저장 횟수.
+    expect(await tester.runAsync(settings.shareSaves), 1);
   });
 }

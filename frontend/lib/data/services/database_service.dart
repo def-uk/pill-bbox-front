@@ -18,7 +18,7 @@ class DatabaseService {
     return _factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 6,
+        version: 7,
         onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
         onCreate: _create,
         onUpgrade: _upgrade,
@@ -60,6 +60,7 @@ class DatabaseService {
     _createPrescriptions(batch);
     _createMonsters(batch);
     _createCollection(batch);
+    _createSettings(batch);
     await batch.commit(noResult: true);
   }
 
@@ -80,6 +81,7 @@ class DatabaseService {
       _createMonsters(batch);
     }
     if (from < 6) _createCollection(batch);
+    if (from < 7) _createSettings(batch);
     await batch.commit(noResult: true);
   }
 
@@ -152,6 +154,13 @@ class DatabaseService {
         accessory TEXT,
         pet_prescription_id INTEGER REFERENCES prescriptions(id) ON DELETE SET NULL
       )''');
+
+  /// 버전 7. 기기 설정: 나이 확인, 공유 카드 저장 수 (docs/MVP.md 9장). 기기마다 다시 하는 것이라 백업에 넣지 않는다.
+  static void _createSettings(Batch batch) => batch.execute('''
+    CREATE TABLE settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )''');
 
   Future<void> close() async {
     final database = _database;

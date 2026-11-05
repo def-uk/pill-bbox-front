@@ -24,6 +24,7 @@ void main() {
         drugInfo: fakeDrugInfo(),
       ),
     );
+    await passAgeGate(tester);
     await pumpUntilFound(tester, find.text('복용 시간 정하기'));
     await tester.tap(find.text('복용 시간 정하기'));
     await pumpUntilFound(tester, find.text('약 등록'));

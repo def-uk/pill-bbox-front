@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../data/repositories/settings_repository.dart';
 import '../utils/monster_look.dart';
 import '../utils/reward_calculator.dart';
 import '../utils/time_format.dart';
@@ -31,10 +32,39 @@ import 'monster/monster_screen.dart';
 import 'monster/monster_view_model.dart';
 import 'result/result_screen.dart';
 import 'result/result_view_model.dart';
+import 'metrics/metrics_screen.dart';
+import 'metrics/metrics_view_model.dart';
+import 'welcome/about_screen.dart';
+import 'welcome/welcome_screen.dart';
 import 'reward/reward_screen.dart';
 
-GoRouter buildRouter() => GoRouter(
+/// [settings]를 듣다가 나이를 확인하지 않았으면 어느 화면이든 나이 확인으로 보낸다.
+GoRouter buildRouter(SettingsRepository settings) => GoRouter(
+  refreshListenable: settings,
+  redirect: (context, state) {
+    final atWelcome = state.matchedLocation == '/welcome';
+    if (!settings.ageConfirmed) return atWelcome ? null : '/welcome';
+    return atWelcome ? '/' : null;
+  },
   routes: [
+    GoRoute(
+      path: '/welcome',
+      builder: (context, state) => const WelcomeScreen(),
+    ),
+    GoRoute(path: '/about', builder: (context, state) => const AboutScreen()),
+    GoRoute(
+      path: '/metrics',
+      builder: (context, state) => ChangeNotifierProvider(
+        create: (context) => MetricsViewModel(
+          medications: context.read(),
+          prescriptions: context.read(),
+          intakes: context.read(),
+          rewards: context.read(),
+          settings: context.read(),
+        )..load(),
+        child: const MetricsScreen(),
+      ),
+    ),
     GoRoute(
       path: '/',
       builder: (context, state) => ChangeNotifierProvider(

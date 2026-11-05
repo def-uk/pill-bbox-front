@@ -66,6 +66,7 @@ void main() {
         labels: PillLabelService(),
       ),
     );
+    await passAgeGate(tester);
 
     // 홈 → 뽑기
     await pumpUntilFound(tester, find.text('뽑기 · 1장'));

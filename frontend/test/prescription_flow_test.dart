@@ -24,6 +24,7 @@ void main() {
         labels: PillLabelService(),
       ),
     );
+    await passAgeGate(tester);
     await pumpUntilFound(tester, find.text('복용 시간 정하기'));
     await tester.tap(find.text('복용 시간 정하기'));
     await pumpUntilFound(tester, find.text('처방 등록'));

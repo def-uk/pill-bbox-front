@@ -72,6 +72,12 @@ Future<void> pumpUntilFound(WidgetTester tester, Finder finder) async {
   throw TestFailure('찾지 못함: $finder, 화면: $texts');
 }
 
+/// 처음 열 때 나오는 나이 확인을 통과한다.
+Future<void> passAgeGate(WidgetTester tester) async {
+  await pumpUntilFound(tester, find.text('네, 만 14세 이상이에요'));
+  await tester.tap(find.text('네, 만 14세 이상이에요'));
+}
+
 /// 저장 뒤 보상 결과 화면이 나왔으면 닫는다. 보상은 기록 시각에 따라 달라 나오지 않을 수도 있다.
 Future<void> dismissRewardIfShown(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 500));

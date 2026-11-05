@@ -11,6 +11,7 @@ import 'data/repositories/intake_repository.dart';
 import 'data/repositories/medication_repository.dart';
 import 'data/repositories/prescription_repository.dart';
 import 'data/repositories/reward_repository.dart';
+import 'data/repositories/settings_repository.dart';
 import 'data/services/backup_file_service.dart';
 import 'data/services/database_service.dart';
 import 'data/services/drug_info_service.dart';
@@ -77,11 +78,14 @@ class PillboxApp extends StatefulWidget {
 }
 
 class _PillboxAppState extends State<PillboxApp> {
-  final GoRouter _router = buildRouter();
+  late final SettingsRepository _settings = SettingsRepository(widget.database)
+    ..load();
+  late final GoRouter _router = buildRouter(_settings);
 
   @override
   void dispose() {
     _router.dispose();
+    _settings.dispose();
     super.dispose();
   }
 
@@ -89,6 +93,7 @@ class _PillboxAppState extends State<PillboxApp> {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider.value(value: _settings),
         Provider.value(value: widget.photos),
         Provider.value(value: widget.picker),
         Provider.value(value: widget.detector),

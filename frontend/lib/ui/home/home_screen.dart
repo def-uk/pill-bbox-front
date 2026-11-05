@@ -204,6 +204,14 @@ class HomeScreen extends StatelessWidget {
             itemBuilder: (_) => [
               PopupMenuItem(onTap: exportExcel, child: const Text('엑셀로 내보내기')),
               PopupMenuItem(onTap: importExcel, child: const Text('엑셀에서 가져오기')),
+              PopupMenuItem(
+                onTap: () => context.push('/metrics'),
+                child: const Text('테스트 지표'),
+              ),
+              PopupMenuItem(
+                onTap: () => context.push('/about'),
+                child: const Text('앱 안내'),
+              ),
             ],
           ),
         ],
@@ -230,6 +238,7 @@ class HomeScreen extends StatelessWidget {
                 time: time,
                 slots: slots,
                 current: time == vm.currentTime,
+                missed: vm.isMissed(time, slots),
                 onTap: markTaken,
               ),
             ],
@@ -312,11 +321,15 @@ class _DoseCard extends StatelessWidget {
     required this.slots,
     required this.current,
     required this.onTap,
+    this.missed = false,
   });
 
   final int time;
   final List<DoseSlot> slots;
   final bool current;
+
+  /// 회차 시간이 한참 지났는데 다 먹지 않았다.
+  final bool missed;
   final void Function(DoseSlot) onTap;
 
   @override
@@ -337,6 +350,34 @@ class _DoseCard extends StatelessWidget {
             subtitle: '1회 ${slot.dose}정',
             trailing: _SlotStatus(slot: slot),
             onTap: slot.isDone ? null : () => onTap(slot),
+          ),
+        if (missed)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.gutter,
+              AppSpacing.xs,
+              AppSpacing.gutter,
+              AppSpacing.sm,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.info_outline_rounded,
+                  size: 18,
+                  color: AppColors.inkMuted,
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Text(
+                    '놓친 약은 의사·약사의 안내를 따르세요',
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.inkMuted,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
       ],
     );
